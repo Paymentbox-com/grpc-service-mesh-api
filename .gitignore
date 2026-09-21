@@ -1,0 +1,9 @@
+# Editors
+.idea/
+
+# Build output
+/build/
+/bin/
+/dist/
+*.test
+*.out

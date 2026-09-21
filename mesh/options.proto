@@ -1,0 +1,30 @@
+// Custom options defined by the gRPC Service Mesh API.
+// Definitions projects import this file unchanged.
+syntax = "proto3";
+
+package mesh;
+
+import "google/protobuf/descriptor.proto";
+
+// Kind says whether a method replies.
+enum Kind {
+  ROUTE = 0;
+  TOPIC = 1;
+}
+
+extend google.protobuf.MethodOptions {
+  // Absent means ROUTE.
+  Kind kind = 50001;
+  // Consumer group for the binding generated from this method. Absent means
+  // the deployment group.
+  string consumer_group = 50002;
+}
+
+extend google.protobuf.FileOptions {
+  // Overrides the deployment group name for the file's top-level directory.
+  // Absent means the directory name.
+  string deployment_group = 50003;
+  // Names the transport the file's top-level directory is served over.
+  // Exactly one file per top-level directory sets it.
+  string transport = 50004;
+}

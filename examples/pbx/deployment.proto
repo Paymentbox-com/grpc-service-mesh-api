@@ -1,0 +1,8 @@
+// Directory-wide settings for the pbx deployment group.
+syntax = "proto3";
+
+package pbx;
+
+import "mesh/options.proto";
+
+option (mesh.transport) = "nats";
