@@ -153,6 +153,17 @@ definitions/
 
 ## Generation
 
+### Installing the generator
+
+The generator is the Go program `grpc-service-mesh-gen` in this repository:
+
+```sh
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.0
+```
+
+or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.0`
+with the same flags. `grpc-service-mesh-gen --help` describes every flag.
+
 One command generates everything for a definitions project:
 
 ```sh
