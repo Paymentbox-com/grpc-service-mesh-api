@@ -405,7 +405,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 ### Go
 
 ```sh
-go get github.com/Paymentbox-com/grpc-service-mesh-go@v0.2.0
+go get github.com/Paymentbox-com/grpc-service-mesh-go@v0.3.0
 ```
 
 The library imports `github.com/Paymentbox-com/service-mesh-go/mesh`, `google.golang.org/protobuf`, and 
@@ -425,7 +425,7 @@ the detail types in `google/rpc/error_details.proto`, such as `Google::Rpc::Erro
 
 ```ruby
 # Gemfile
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.1.0"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.2.0"
 gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.2.0"
 gem "googleapis-common-protos-types"
 gem "service_mesh_nats", git: "https://github.com/Paymentbox-com/service-mesh-nats-ruby", tag: "v0.2.0"
@@ -524,7 +524,7 @@ err = grpcmesh.Register(pbx.ApiKeyService{
     Search: func(ctx context.Context, req *pbx.ApiKey) (*pbx.ApiKey, error) {
         key, ok := store.Find(req.GetFirstName())
         if !ok {
-            return nil, grpcmesh.NewMeshError(code.Code_NOT_FOUND, "no such key",
+            return nil, grpcmesh.NewNotFoundError("no such key",
                 &errdetails.ErrorInfo{Reason: "KEY_MISSING", Domain: "pbx"})
         }
         return key, nil
@@ -606,7 +606,7 @@ class ApiKeys < Pbx::ApiKeyService
 
   def search(request, metadata)
     key = @store.find(request.first_name) or
-      raise GrpcServiceMesh::MeshError.new(:NOT_FOUND, "no such key",
+      raise GrpcServiceMesh::NotFoundError.new("no such key",
         Google::Rpc::ErrorInfo.new(reason: "KEY_MISSING", domain: "pbx"))
     Pbx::ApiKey.new(first_name: key.first_name, last_name: key.last_name)
   end
