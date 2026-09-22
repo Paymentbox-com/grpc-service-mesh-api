@@ -9,6 +9,8 @@ Using this specification, libraries can be implemented across programming langua
 protobuf definitions into code that is compatible with the Service Mesh API and compatible with each other across 
 transports and language specific runtimes.
 
+![ServiceMeshInterface.drawio.png](ServiceMeshInterface.drawio.png)
+
 ## The Generator
 
 The gRPC Service Mesh API uses a generator, which reads `protoc` output to generate the necessary code to consume the 
@@ -285,9 +287,9 @@ are the service name with one trailing `Service` stripped, then `Client` or `Tar
 `ApiKeyTargets`. A name that would be empty after stripping is kept whole. The method's signature for each client 
 side method mirrors the handler on the service side:
 
-| kind    | client method signature                                                                                      | Service Mesh API operation |
+| kind    | client method signature                   langua                                                                   | Service Mesh API operation |
 |---------|--------------------------------------------------------------------------------------------------------------|----------------------------|
-| `ROUTE` | `(context, Request) -> (Response) [May return or raise a MeshError, depending on language/implementation]`   | `Request`                  |
+| `ROUTE` | `(context, Request) -> (Response) [May return or raise a MeshError, depending on ge/implementation]`   | `Request`                  |
 | `TOPIC` | `(context, Request) [May return or raise a MeshError, depending on language/implementation]`                 | `Publish`                  |
 
 A `ROUTE` or `TOPIC` method encodes the standard, generated type into a `Message` addressed to the method's `Target` and sends that
