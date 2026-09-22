@@ -405,7 +405,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 ### Go
 
 ```sh
-go get github.com/Paymentbox-com/grpc-service-mesh-go@v0.1.1
+go get github.com/Paymentbox-com/grpc-service-mesh-go@v0.2.0
 ```
 
 The library imports `github.com/Paymentbox-com/service-mesh-go/mesh`, `google.golang.org/protobuf`, and 
@@ -524,12 +524,8 @@ err = grpcmesh.Register(pbx.ApiKeyService{
     Search: func(ctx context.Context, req *pbx.ApiKey) (*pbx.ApiKey, error) {
         key, ok := store.Find(req.GetFirstName())
         if !ok {
-            me, err := grpcmesh.NewMeshError(code.Code_NOT_FOUND, "no such key").
-                WithDetails(&errdetails.ErrorInfo{Reason: "KEY_MISSING", Domain: "pbx"})
-            if err != nil {
-                return nil, err
-            }
-            return nil, me
+            return nil, grpcmesh.NewMeshError(code.Code_NOT_FOUND, "no such key",
+                &errdetails.ErrorInfo{Reason: "KEY_MISSING", Domain: "pbx"})
         }
         return key, nil
     },
