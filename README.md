@@ -458,7 +458,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 ### Go
 
 ```sh
-go get github.com/Paymentbox-com/grpc-service-mesh-go@v0.4.0
+go get github.com/Paymentbox-com/grpc-service-mesh-go@v0.5.0
 ```
 
 The library imports `github.com/Paymentbox-com/service-mesh-go/mesh`, `google.golang.org/protobuf`, and 
@@ -466,7 +466,7 @@ The library imports `github.com/Paymentbox-com/service-mesh-go/mesh`, `google.go
 adds; the NATS transport is `github.com/Paymentbox-com/service-mesh-nats-go`, package `nats`:
 
 ```sh
-go get github.com/Paymentbox-com/service-mesh-nats-go@v0.3.0
+go get github.com/Paymentbox-com/service-mesh-nats-go@v0.4.0
 ```
 
 ### Ruby
@@ -478,10 +478,10 @@ the detail types in `google/rpc/error_details.proto`, such as `Google::Rpc::Erro
 
 ```ruby
 # Gemfile
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.3.0"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.4.0"
 gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.3.0"
 gem "googleapis-common-protos-types"
-gem "service_mesh_nats", git: "https://github.com/Paymentbox-com/service-mesh-nats-ruby", tag: "v0.3.0"
+gem "service_mesh_nats", git: "https://github.com/Paymentbox-com/service-mesh-nats-ruby", tag: "v0.4.0"
 ```
 
 `service_mesh_nats` is the NATS transport; another transport gem takes its place in an application that uses a 
@@ -556,7 +556,7 @@ import (
     "example.com/definitions/lib/go/servicemaps"
 )
 
-err := grpcmesh.AddTransport("nats", grpcmesh.Transport{
+grpcmesh.AddTransport("nats", grpcmesh.Transport{
     Config:     mesh.Config{nats.URLKey: os.Getenv("NATS_URL")},
     ServiceMap: servicemaps.Nats,
     NewRuntime: func(cfg mesh.Config, sm mesh.ServiceMap, e []mesh.Endpoint, s []mesh.Subscriber) (mesh.Runtime, error) {
@@ -573,7 +573,7 @@ serves; a nil field is not served. A ROUTE handler returns the response or an er
 the application failure the caller receives.
 
 ```go
-err = grpcmesh.Register(pbx.ApiKeyService{
+grpcmesh.Register(pbx.ApiKeyService{
     Search: func(ctx context.Context, req *pbx.ApiKey) (*pbx.ApiKey, error) {
         key, ok := store.Find(req.GetFirstName())
         if !ok {
@@ -593,7 +593,7 @@ that deployment group. `Start`, `Stop`, and `Running` delegate to it.
 
 ```go
 rt, err := grpcmesh.NewRPCRuntime("nats", "pbx")
-if err != nil { /* grpcmesh.ErrUnknownTransport, grpcmesh.ErrDuplicateRuntime, or the transport constructor's error */ }
+if err != nil { /* grpcmesh.ErrUnknownTransport or the transport constructor's error */ }
 if err := rt.Start(ctx); err != nil { /* the transport's error */ }
 
 drain, cancel := context.WithTimeout(context.Background(), 10*time.Second)
