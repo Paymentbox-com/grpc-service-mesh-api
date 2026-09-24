@@ -232,7 +232,7 @@ wire is the directory package's message.
 
 ```sh
 grpc-service-mesh-gen --definitions definitions --out lib --lang go,ruby \
-    --go-root-package "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh" --ruby-root-module PmtboxMesh
+    --go-root-package "github.com/Paymentbox-com/pmtbox-mesh;pmtboxmesh" --ruby-root-module PmtboxMesh
 ```
 
 In Go the file is `<go out>/<name>.grpcmesh.go` with `package <name>`, where `<name>` is the last element of the 
