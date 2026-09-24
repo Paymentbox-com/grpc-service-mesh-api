@@ -73,15 +73,12 @@ func FindProtos(definitions string) ([]string, error) {
 	return out, nil
 }
 
-// OptionsProto is the specification's options file, imported by every
-// definitions file that sets a mesh option.
-const OptionsProto = "mesh/options.proto"
-
-// OptionsGoImport is the compiled Go form of OptionsProto, hosted by this
-// module. protoc-gen-go adds a blank import of it to every message file that
-// imports OptionsProto, so the definitions project's Go module requires this
-// module.
-const OptionsGoImport = "github.com/Paymentbox-com/grpc-service-mesh-api/mesh"
+// OptionsProto and OptionsGoImport are the specification's options file and
+// its compiled Go form, as spec defines them.
+const (
+	OptionsProto    = spec.OptionsProto
+	OptionsGoImport = spec.OptionsGoImport
+)
 
 // googleRPC lists the google/rpc files, whose compiled forms come from the
 // standard packages of each language: google.golang.org/genproto in Go and

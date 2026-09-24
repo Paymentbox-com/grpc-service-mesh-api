@@ -71,9 +71,30 @@ type Directory struct {
 	Services        []Service // in file order, then declaration order
 }
 
+// Source is one proto file of the definitions tree whose message code the
+// standard protoc runs write. The specification's own files and the
+// google/protobuf files that ship with protoc are not sources.
+type Source struct {
+	Path        string
+	Package     string
+	GoPackage   string
+	RubyPackage string
+	Desc        protoreflect.FileDescriptor
+	Services    []Service // the file's services, in declaration order
+}
+
 // Model is what the emitters read.
 type Model struct {
 	Directories []Directory // sorted by path
+	Sources     []Source    // sorted by path
+	set         *descriptorpb.FileDescriptorSet
+}
+
+// isSource reports whether protoc writes message code for the file: every
+// file except mesh/options.proto, google/rpc/*.proto, and the
+// google/protobuf/*.proto that ship with protoc.
+func isSource(p string) bool {
+	return p != "mesh/options.proto" && !strings.HasPrefix(p, "google/rpc/") && !strings.HasPrefix(p, "google/protobuf/")
 }
 
 // SourceFiles lists the directory's files that declare a service.
@@ -304,7 +325,26 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 	}
 	sort.Strings(dirs)
 
-	m := &Model{}
+	// Services of every file, built once; a directory's list reads from here.
+	services := map[string][]Service{}
+	for _, fi := range infos {
+		svcs := fi.desc.Services()
+		for i := 0; i < svcs.Len(); i++ {
+			svc, err := buildService(fi, svcs.Get(i), opts)
+			errs = append(errs, err...)
+			services[fi.path] = append(services[fi.path], svc)
+		}
+	}
+
+	m := &Model{set: set}
+	for _, fi := range infos {
+		if isSource(fi.path) {
+			m.Sources = append(m.Sources, Source{
+				Path: fi.path, Package: string(fi.desc.Package()), GoPackage: fi.goPackage, RubyPackage: fi.rubyPackage,
+				Desc: fi.desc, Services: services[fi.path],
+			})
+		}
+	}
 	for _, dir := range dirs {
 		group := byDir[dir]
 		hasService := false
@@ -325,12 +365,7 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 				RubyPackage: fi.rubyPackage,
 				Empty:       fi.desc.Messages().Len() == 0 && fi.desc.Enums().Len() == 0 && fi.desc.Extensions().Len() == 0 && fi.desc.Services().Len() == 0,
 			})
-			svcs := fi.desc.Services()
-			for i := 0; i < svcs.Len(); i++ {
-				svc, err := buildService(fi, svcs.Get(i), opts)
-				errs = append(errs, err...)
-				d.Services = append(d.Services, svc)
-			}
+			d.Services = append(d.Services, services[fi.path]...)
 		}
 		m.Directories = append(m.Directories, d)
 	}
