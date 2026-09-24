@@ -466,7 +466,7 @@ The library imports `github.com/Paymentbox-com/service-mesh-go/mesh`, `google.go
 adds; the NATS transport is `github.com/Paymentbox-com/service-mesh-nats-go`, package `nats`:
 
 ```sh
-go get github.com/Paymentbox-com/service-mesh-nats-go@v0.4.0
+go get github.com/Paymentbox-com/service-mesh-nats-go@v0.4.1
 ```
 
 ### Ruby
@@ -478,10 +478,10 @@ the detail types in `google/rpc/error_details.proto`, such as `Google::Rpc::Erro
 
 ```ruby
 # Gemfile
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.4.1"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.4.2"
 gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.3.1"
 gem "googleapis-common-protos-types"
-gem "service_mesh_nats", git: "https://github.com/Paymentbox-com/service-mesh-nats-ruby", tag: "v0.4.1"
+gem "service_mesh_nats", git: "https://github.com/Paymentbox-com/service-mesh-nats-ruby", tag: "v0.4.2"
 ```
 
 `service_mesh_nats` is the NATS transport; another transport gem takes its place in an application that uses a 
