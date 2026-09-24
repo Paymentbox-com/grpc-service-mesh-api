@@ -21,7 +21,9 @@ func run(t *testing.T, args ...string) (int, string, string) {
 func TestRun_Help(t *testing.T) {
 	code, _, stderr := run(t, "--help")
 	if code != 0 || !strings.Contains(stderr, "--definitions <dir>") || !strings.Contains(stderr, "--descriptors <file>") ||
-		!strings.Contains(stderr, "--out <dir>") || !strings.Contains(stderr, "--lang <list>") || !strings.Contains(stderr, "--verbose") {
+		!strings.Contains(stderr, "--out <dir>") || !strings.Contains(stderr, "--go-out <dir>") || !strings.Contains(stderr, "--ruby-out <dir>") ||
+		!strings.Contains(stderr, "--go-root-package <import path[;name]>") || !strings.Contains(stderr, "--ruby-root-module <Module>") ||
+		!strings.Contains(stderr, "--lang <list>") || !strings.Contains(stderr, "--verbose") {
 		t.Fatalf("code %d, help:\n%s", code, stderr)
 	}
 }
@@ -42,7 +44,42 @@ func TestRun_BothInputsIsAUsageError(t *testing.T) {
 
 func TestRun_OutRequired(t *testing.T) {
 	code, _, stderr := run(t, "--descriptors", "x.pb", "--lang", "go")
-	if code != 2 || !strings.Contains(stderr, "--out is required") {
+	if code != 2 || !strings.Contains(stderr, "--out is required unless --go-out is given") {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+}
+
+func TestRun_OutRequiredForTheLanguageWithoutItsOwnRoot(t *testing.T) {
+	code, _, stderr := run(t, "--descriptors", "x.pb", "--lang", "go,ruby", "--go-out", t.TempDir())
+	if code != 2 || !strings.Contains(stderr, "--out is required unless --ruby-out is given") {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+}
+
+func TestRun_GoOutWithoutGoIsAUsageError(t *testing.T) {
+	code, _, stderr := run(t, "--descriptors", "x.pb", "--out", t.TempDir(), "--lang", "ruby", "--go-out", t.TempDir())
+	if code != 2 || !strings.Contains(stderr, "--go-out applies to go, which is not in --lang") {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+}
+
+func TestRun_RubyRootModuleWithoutRubyIsAUsageError(t *testing.T) {
+	code, _, stderr := run(t, "--descriptors", "x.pb", "--out", t.TempDir(), "--lang", "go", "--ruby-root-module", "PmtboxMesh")
+	if code != 2 || !strings.Contains(stderr, "--ruby-root-module applies to ruby, which is not in --lang") {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+}
+
+func TestRun_InvalidGoRootPackageIsAUsageError(t *testing.T) {
+	code, _, stderr := run(t, "--descriptors", "x.pb", "--out", t.TempDir(), "--lang", "go", "--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtbox-mesh")
+	if code != 2 || !strings.Contains(stderr, `--go-root-package: "pmtbox-mesh" is not a Go package name`) {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+}
+
+func TestRun_InvalidRubyRootModuleIsAUsageError(t *testing.T) {
+	code, _, stderr := run(t, "--descriptors", "x.pb", "--out", t.TempDir(), "--lang", "ruby", "--ruby-root-module", "pmtbox_mesh")
+	if code != 2 || !strings.Contains(stderr, `--ruby-root-module: "pmtbox_mesh" is not a Ruby module name`) {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
 }
@@ -108,6 +145,78 @@ func TestRun_DescriptorsOnlyRequestedLanguage(t *testing.T) {
 	}
 }
 
+func TestRun_GoOutReplacesTheGoRoot(t *testing.T) {
+	out, goOut := t.TempDir(), t.TempDir()
+	code, _, stderr := run(t, "--descriptors", pbxSet(t), "--out", out, "--go-out", goOut, "--lang", "go,ruby")
+	if code != 0 {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+	for _, p := range []string{filepath.Join(goOut, "pbx", "pbx.grpcmesh.go"), filepath.Join(goOut, "servicemaps", "servicemaps.go"), filepath.Join(out, "ruby", "service_maps.rb")} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%v", err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(out, "go")); !os.IsNotExist(err) {
+		t.Errorf("<out>/go written: %v", err)
+	}
+}
+
+func TestRun_RubyOutReplacesTheRubyRoot(t *testing.T) {
+	out, rubyOut := t.TempDir(), t.TempDir()
+	code, _, stderr := run(t, "--descriptors", pbxSet(t), "--out", out, "--ruby-out", rubyOut, "--lang", "go,ruby")
+	if code != 0 {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+	for _, p := range []string{filepath.Join(rubyOut, "pbx", "pbx_grpcmesh.rb"), filepath.Join(rubyOut, "service_maps.rb"), filepath.Join(out, "go", "servicemaps", "servicemaps.go")} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%v", err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(out, "ruby")); !os.IsNotExist(err) {
+		t.Errorf("<out>/ruby written: %v", err)
+	}
+}
+
+func TestRun_BothLanguageRootsNeedNoOut(t *testing.T) {
+	goOut, rubyOut := t.TempDir(), t.TempDir()
+	code, _, stderr := run(t, "--descriptors", pbxSet(t), "--go-out", goOut, "--ruby-out", rubyOut, "--lang", "go,ruby")
+	if code != 0 {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+	for _, p := range []string{filepath.Join(goOut, "servicemaps", "servicemaps.go"), filepath.Join(rubyOut, "service_maps.rb")} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%v", err)
+		}
+	}
+}
+
+func TestRun_RootFilesWrittenAtTheLanguageRoots(t *testing.T) {
+	out := t.TempDir()
+	code, _, stderr := run(t, "--descriptors", pbxSet(t), "--out", out, "--lang", "go,ruby",
+		"--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", "--ruby-root-module", "PmtboxMesh")
+	if code != 0 {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+	for _, p := range []string{"go/pmtboxmesh.grpcmesh.go", "ruby/pmtbox_mesh_grpcmesh.rb"} {
+		if _, err := os.Stat(filepath.Join(out, filepath.FromSlash(p))); err != nil {
+			t.Errorf("%s: %v", p, err)
+		}
+	}
+}
+
+func TestRun_RootPackageErrorExitsOne(t *testing.T) {
+	out := t.TempDir()
+	code, _, stderr := run(t, "--descriptors", pbxSet(t), "--out", out, "--lang", "go", "--go-root-package", "github.com/Paymentbox-com/pbx")
+	want := "grpc-service-mesh-gen: root package pbx: pbx/api_key.proto generates a package with the same name\n" +
+		"grpc-service-mesh-gen: root package pbx: pbx/deployment.proto generates a package with the same name\n"
+	if code != 1 || stderr != want {
+		t.Fatalf("code %d, stderr:\n%s", code, stderr)
+	}
+	if entries, _ := os.ReadDir(out); len(entries) != 0 {
+		t.Fatalf("output written despite errors: %v", entries)
+	}
+}
+
 func TestRun_GeneratorErrorsOneLineEachExitOne(t *testing.T) {
 	defs := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(defs, "pbx"), 0o755); err != nil {
@@ -163,6 +272,24 @@ func TestRun_DefinitionsRunsProtocAndWritesEverything(t *testing.T) {
 	}
 	if strings.Count(stdout, "protoc ") != 3 {
 		t.Errorf("three protoc runs expected:\n%s", stdout)
+	}
+}
+
+func TestRun_DefinitionsMessageRunsUseTheLanguageRoots(t *testing.T) {
+	goOut, rubyOut := t.TempDir(), t.TempDir()
+	code, stdout, stderr := run(t, "--definitions", filepath.Join(repoRoot, "examples"), "--go-out", goOut, "--ruby-out", rubyOut, "--lang", "go,ruby", "--verbose")
+	if code != 0 {
+		t.Fatalf("code %d, stderr:\n%s", code, stderr)
+	}
+	for _, want := range []string{"--go_out=" + goOut + " ", "--ruby_out=" + rubyOut + " "} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("missing %q in verbose output:\n%s", want, stdout)
+		}
+	}
+	for _, p := range []string{filepath.Join(goOut, "pbx", "api_key.pb.go"), filepath.Join(rubyOut, "pbx", "api_key_pb.rb")} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%v", err)
+		}
 	}
 }
 

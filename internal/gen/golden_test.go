@@ -7,8 +7,10 @@ import (
 	"testing"
 )
 
-// TestGolden_ExamplesPbx generates examples/pbx and compares every file to
-// testdata/golden. UPDATE_GOLDEN=1 rewrites the golden files instead.
+// TestGolden_ExamplesPbx generates examples/pbx twice, without and with the
+// root package options, and compares every file to testdata/golden. The
+// directory and ServiceMaps files are the same in both runs. UPDATE_GOLDEN=1
+// rewrites the golden files instead.
 func TestGolden_ExamplesPbx(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "set.pb")
 	cmd := exec.Command("protoc",
@@ -22,7 +24,15 @@ func TestGolden_ExamplesPbx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	outs, err := Generate(set, []Lang{Go, Ruby})
+	plain, err := Generate(set, Options{Langs: []Lang{Go, Ruby}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rooted, err := Generate(set, Options{
+		Langs:          []Lang{Go, Ruby},
+		GoRootPackage:  "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh",
+		RubyRootModule: "PmtboxMesh",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,23 +41,30 @@ func TestGolden_ExamplesPbx(t *testing.T) {
 		if err := os.RemoveAll(golden); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := Write(golden, outs); err != nil {
+		if _, err := Write(map[Lang]string{Go: filepath.Join(golden, "go"), Ruby: filepath.Join(golden, "ruby")}, rooted); err != nil {
 			t.Fatal(err)
 		}
 	}
-	want := map[string]bool{
-		"go/pbx/pbx.grpcmesh.go":        true,
-		"go/servicemaps/servicemaps.go": true,
-		"ruby/pbx/pbx_grpcmesh.rb":      true,
-		"ruby/service_maps.rb":          true,
+	shared := []string{"go/pbx/pbx.grpcmesh.go", "go/servicemaps/servicemaps.go", "ruby/pbx/pbx_grpcmesh.rb", "ruby/service_maps.rb"}
+	compareGolden(t, golden, plain, shared)
+	compareGolden(t, golden, rooted, append(shared, "go/pmtboxmesh.grpcmesh.go", "ruby/pmtbox_mesh_grpcmesh.rb"))
+}
+
+// compareGolden checks that outs are exactly the files in want and that each
+// matches its golden file.
+func compareGolden(t *testing.T, golden string, outs []Output, want []string) {
+	t.Helper()
+	missing := map[string]bool{}
+	for _, rel := range want {
+		missing[rel] = true
 	}
 	for _, o := range outs {
 		rel := string(o.Lang) + "/" + o.Path
-		if !want[rel] {
+		if !missing[rel] {
 			t.Errorf("unexpected output %s", rel)
 			continue
 		}
-		delete(want, rel)
+		delete(missing, rel)
 		b, err := os.ReadFile(filepath.Join(golden, filepath.FromSlash(rel)))
 		if err != nil {
 			t.Fatal(err)
@@ -56,7 +73,7 @@ func TestGolden_ExamplesPbx(t *testing.T) {
 			t.Errorf("%s differs from golden:\n%s", rel, o.Content)
 		}
 	}
-	for rel := range want {
+	for rel := range missing {
 		t.Errorf("missing output %s", rel)
 	}
 }

@@ -46,6 +46,13 @@ func (im *goImports) use(importPath, name string) string {
 	return local
 }
 
+// blank records an import for its side effects alone, written as _ "path".
+func (im *goImports) blank(importPath string) {
+	if _, ok := im.local[importPath]; !ok {
+		im.local[importPath] = "_"
+	}
+}
+
 // block renders the import block: standard library first, then the rest,
 // each group sorted by path.
 func (im *goImports) block() string {

@@ -27,8 +27,8 @@ Flags:
   --definitions <dir>
       The definitions directory. Every *.proto under it is compiled, with
       paths relative to it. protoc runs three ways: the message code of each
-      requested language (Go with --go_out=<out>/go --go_opt=paths=source_relative,
-      Ruby with --ruby_out=<out>/ruby), one FileDescriptorSet of the whole
+      requested language (Go with --go_out=<go out> --go_opt=paths=source_relative,
+      Ruby with --ruby_out=<ruby out>), one FileDescriptorSet of the whole
       directory with --include_imports --include_source_info, and this
       generator over that set. Embedded copies of mesh/options.proto and
       google/rpc/*.proto are added as a second --proto_path, so a project need
@@ -44,7 +44,26 @@ Flags:
       <dir>/<name>.grpcmesh.go or <dir>/<name>_grpcmesh.rb in its generated
       package, and the per-transport ServiceMaps go to
       <out>/go/servicemaps/servicemaps.go and <out>/ruby/service_maps.rb.
-      Required.
+      Required unless every requested language has its own output root.
+  --go-out <dir>
+      The Go output root, in place of <out>/go. Needs go in --lang.
+  --ruby-out <dir>
+      The Ruby output root, in place of <out>/ruby. Needs ruby in --lang.
+  --go-root-package <import path[;name]>
+      Also write <go out>/<name>.grpcmesh.go, package <name>, aliasing every
+      generated Go identifier of the definitions tree: each message and enum
+      type, each enum value, and each RPCService type, client, and targets
+      value. <name> is the last element of the import path unless given after
+      ";", as in go_package. Every aliased identifier must be unique across
+      the tree, and no directory package may share the root package's name.
+      Needs go in --lang.
+  --ruby-root-module <Module>
+      Also write <ruby out>/<snake_case(Module)>_grpcmesh.rb, requiring every
+      generated Ruby file and defining module <Module> with a constant for
+      every top-level message and enum, each RPCService, client, and targets
+      constant, and ServiceMaps. Every aliased constant must be unique across
+      the tree, and no generated module may share the root module's name.
+      Needs ruby in --lang.
   --lang <list>
       Comma-separated languages to generate, from go and ruby. Required.
   --verbose
@@ -65,6 +84,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	definitions := fs.String("definitions", "", "")
 	descriptors := fs.String("descriptors", "", "")
 	out := fs.String("out", "", "")
+	goOut := fs.String("go-out", "", "")
+	rubyOut := fs.String("ruby-out", "", "")
+	goRoot := fs.String("go-root-package", "", "")
+	rubyRoot := fs.String("ruby-root-module", "", "")
 	lang := fs.String("lang", "", "")
 	verbose := fs.Bool("verbose", false, "")
 	if err := fs.Parse(args); err != nil {
@@ -83,13 +106,51 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if (*definitions == "") == (*descriptors == "") {
 		return usage("exactly one of --definitions and --descriptors is required")
 	}
-	if *out == "" {
-		return usage("--out is required")
-	}
 	langs, err := gen.ParseLangs(*lang)
 	if err != nil {
 		return usage(err.Error())
 	}
+	has := map[gen.Lang]bool{}
+	for _, l := range langs {
+		has[l] = true
+	}
+	for _, f := range []struct {
+		name, value string
+		lang        gen.Lang
+	}{
+		{"--go-out", *goOut, gen.Go}, {"--go-root-package", *goRoot, gen.Go},
+		{"--ruby-out", *rubyOut, gen.Ruby}, {"--ruby-root-module", *rubyRoot, gen.Ruby},
+	} {
+		if f.value != "" && !has[f.lang] {
+			return usage(fmt.Sprintf("%s applies to %s, which is not in --lang", f.name, f.lang))
+		}
+	}
+	roots := map[gen.Lang]string{}
+	for _, l := range langs {
+		own := *goOut
+		if l == gen.Ruby {
+			own = *rubyOut
+		}
+		switch {
+		case own != "":
+			roots[l] = own
+		case *out != "":
+			roots[l] = filepath.Join(*out, string(l))
+		default:
+			return usage(fmt.Sprintf("--out is required unless --%s-out is given", l))
+		}
+	}
+	if *goRoot != "" {
+		if _, _, err := gen.ParseGoRootPackage(*goRoot); err != nil {
+			return usage(err.Error())
+		}
+	}
+	if *rubyRoot != "" {
+		if _, err := gen.ParseRubyRootModule(*rubyRoot); err != nil {
+			return usage(err.Error())
+		}
+	}
+	opts := gen.Options{Langs: langs, GoRootPackage: *goRoot, RubyRootModule: *rubyRoot}
 
 	var log io.Writer
 	if *verbose {
@@ -97,9 +158,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	var written []string
 	if *descriptors != "" {
-		written, err = fromDescriptors(*descriptors, *out, langs)
+		written, err = fromDescriptors(*descriptors, roots, opts)
 	} else {
-		written, err = fromDefinitions(*definitions, *out, langs, log)
+		written, err = fromDefinitions(*definitions, roots, opts, log)
 	}
 	if err != nil {
 		for _, line := range strings.Split(err.Error(), "\n") {
@@ -120,19 +181,19 @@ func say(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
 }
 
-func fromDescriptors(file, out string, langs []gen.Lang) ([]string, error) {
+func fromDescriptors(file string, roots map[gen.Lang]string, opts gen.Options) ([]string, error) {
 	set, err := gen.ReadSet(file)
 	if err != nil {
 		return nil, err
 	}
-	outs, err := gen.Generate(set, langs)
+	outs, err := gen.Generate(set, opts)
 	if err != nil {
 		return nil, err
 	}
-	return gen.Write(out, outs)
+	return gen.Write(roots, outs)
 }
 
-func fromDefinitions(definitions, out string, langs []gen.Lang, log io.Writer) ([]string, error) {
+func fromDefinitions(definitions string, roots map[gen.Lang]string, opts gen.Options, log io.Writer) ([]string, error) {
 	files, err := protoc.FindProtos(definitions)
 	if err != nil {
 		return nil, err
@@ -160,20 +221,20 @@ func fromDefinitions(definitions, out string, langs []gen.Lang, log io.Writer) (
 	if err != nil {
 		return nil, err
 	}
-	outs, err := gen.Render(model, langs)
+	outs, err := gen.Render(model, opts)
 	if err != nil {
 		return nil, err
 	}
-	for _, l := range langs {
+	for _, l := range opts.Langs {
 		switch l {
 		case gen.Go:
-			err = r.GoMessages(filepath.Join(out, "go"), files, gen.GoImportOverrides(model))
+			err = r.GoMessages(roots[l], files, gen.GoImportOverrides(model))
 		case gen.Ruby:
-			err = r.RubyMessages(filepath.Join(out, "ruby"), files)
+			err = r.RubyMessages(roots[l], files)
 		}
 		if err != nil {
 			return nil, err
 		}
 	}
-	return gen.Write(out, outs)
+	return gen.Write(roots, outs)
 }
