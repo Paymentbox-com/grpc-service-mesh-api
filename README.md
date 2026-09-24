@@ -357,14 +357,13 @@ generated off of `.proto` files.
 
 ### TransportRouter
 
-The `TransportRouter` provides the transport-specific `Client` and `Runtime` implementations for any given `transport` 
-option. It is a single, process-wide object the application configures at boot with one entry per transport name its 
-definitions use. Generated code for services whose `transport` has no entry fails at runtime. Nothing generated takes 
-the `TransportRouter` as an argument; a generated client is called directly and resolves the transport-specific `Client` 
-through the process router on each call. The `TransportRouter` builds one `Client` per transport on first use and 
-keeps it; its Close closes those `Clients`, and a process that only calls runs it before exit so the transport flushes 
-what it has buffered. Each language-specific implementation of this specification documents how the `TransportRouter` 
-is configured.
+The `TransportRouter` holds, for each `transport` name the definitions use, the transport-specific `Client` the 
+application constructed and the constructor of the transport-specific `Runtime`. It is a single, process-wide object the 
+application configures at boot. Generated code for services whose `transport` has no entry fails at runtime. Nothing 
+generated takes the `TransportRouter` as an argument; a generated client is called directly and takes the `Client` for 
+its `Target`'s transport from the process router on each call. The router's Close closes every `Client` it holds, and a 
+process that only calls runs it before exit so the transport flushes what it has buffered. Each language-specific 
+implementation of this specification documents how the `TransportRouter` is configured.
 
 ### Registry
 
@@ -380,10 +379,11 @@ transport-specific Service Mesh API `Runtime` implementation. It should either w
 functionality.
 
 An `RPCRuntime` is constructed for a single `transport` and a single `deployment_group`. At construction it asks the 
-`Registry` for the implemented `Endpoints` and `Subscribers` whose `Targets` carry its `deployment_group`, obtains the 
-transport-specific `Runtime` implementation from the `TransportRouter`, and hands it those `Endpoints` and `Subscribers` 
-together with the transport's `ServiceMap`. Nothing else reaches the underlying `Runtime`. `Start`, `Stop`, and `Running` 
-delegate to it. Services registered after construction are not served by that `RPCRuntime`. A process holds one 
+`Registry` for the implemented `Endpoints` and `Subscribers` whose `Targets` carry its `deployment_group`, takes the 
+transport's `Client` and `Runtime` constructor from the `TransportRouter`, and builds the transport-specific `Runtime` 
+from that `Client`, its configuration with the `deployment_group` set, and those `Endpoints` and `Subscribers`. The 
+`Runtime` serves over the same connection the process calls through. Nothing else reaches the underlying `Runtime`. 
+`Start`, `Stop`, and `Running` delegate to it, and `Stop` closes the `Client`. Services registered after construction are not served by that `RPCRuntime`. A process holds one 
 `RPCRuntime` per transport.
 
 ### MeshError
@@ -535,8 +535,8 @@ and `require "pbx/pbx_grpcmesh"` resolve.
 
 ### A Go application
 
-The application configures the process router at boot with one entry per transport name, builds its transport's 
-`Runtime` and `Client` in the entry's constructors, and registers the services it serves.
+The application builds its transport's `Client` at boot, hands it to the process router with the transport's 
+`Runtime` constructor, one entry per transport name, and registers the services it serves.
 
 ```go
 import (
@@ -556,14 +556,13 @@ import (
     "example.com/definitions/lib/go/servicemaps"
 )
 
+client, err := nats.NewClient(mesh.Config{nats.URLKey: os.Getenv("NATS_URL")}, servicemaps.Nats)
+if err != nil { /* the transport's connect error */ }
 grpcmesh.AddTransport("nats", grpcmesh.Transport{
-    Config:     mesh.Config{nats.URLKey: os.Getenv("NATS_URL")},
-    ServiceMap: servicemaps.Nats,
-    NewRuntime: func(cfg mesh.Config, sm mesh.ServiceMap, e []mesh.Endpoint, s []mesh.Subscriber) (mesh.Runtime, error) {
-        return nats.New(cfg, sm, e, s)
-    },
-    NewClient: func(cfg mesh.Config, sm mesh.ServiceMap) (mesh.Client, error) {
-        return nats.NewClient(cfg, sm)
+    Client: client,
+    Config: mesh.Config{},
+    NewRuntime: func(c mesh.Client, cfg mesh.Config, e []mesh.Endpoint, s []mesh.Subscriber) (mesh.Runtime, error) {
+        return nats.New(c.(*nats.Client), cfg, e, s)
     },
 })
 ```
@@ -629,8 +628,8 @@ err = pbx.ApiKeyClient.Created(ctx, key)
 
 ### A Ruby application
 
-The same shape in Ruby. `GrpcServiceMesh.add_transport` takes the transport's configuration Hash, the generated 
-`ServiceMap`, and two lambdas that build the transport's `Runtime` and `Client`.
+The same shape in Ruby. `GrpcServiceMesh.add_transport` takes the transport client the application built, the 
+runtime configuration Hash, and a lambda that builds the transport's `Runtime` from a client.
 
 ```ruby
 require "grpc_service_mesh"
@@ -638,11 +637,11 @@ require "service_mesh_nats"
 require "service_maps"
 require "pbx/pbx_grpcmesh"
 
+client = ServiceMeshNats::Client.new({"url" => ENV.fetch("NATS_URL", "nats://127.0.0.1:4222")}, ServiceMaps::NATS)
 GrpcServiceMesh.add_transport("nats",
-  config: {"url" => ENV.fetch("NATS_URL", "nats://127.0.0.1:4222")},
-  service_map: ServiceMaps::NATS,
-  runtime: ->(config, map, endpoints:, subscribers:) { ServiceMeshNats::Runtime.new(config, map, endpoints: endpoints, subscribers: subscribers) },
-  client: ->(config, map) { ServiceMeshNats::Client.new(config, map) })
+  client: client,
+  config: {},
+  runtime: ->(c, cfg, endpoints:, subscribers:) { ServiceMeshNats::Runtime.new(c, cfg, endpoints: endpoints, subscribers: subscribers) })
 ```
 
 The generated `Pbx::ApiKeyService` declares the rpcs and serves nothing itself. The application subclasses it and 
