@@ -361,8 +361,10 @@ The `TransportRouter` provides the transport-specific `Client` and `Runtime` imp
 option. It is a single, process-wide object the application configures at boot with one entry per transport name its 
 definitions use. Generated code for services whose `transport` has no entry fails at runtime. Nothing generated takes 
 the `TransportRouter` as an argument; a generated client is called directly and resolves the transport-specific `Client` 
-through the process router on each call. Each language-specific implementation of this specification documents how the 
-`TransportRouter` is configured.
+through the process router on each call. The `TransportRouter` builds one `Client` per transport on first use and 
+keeps it; its Close closes those `Clients`, and a process that only calls runs it before exit so the transport flushes 
+what it has buffered. Each language-specific implementation of this specification documents how the `TransportRouter` 
+is configured.
 
 ### Registry
 
@@ -456,7 +458,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 ### Go
 
 ```sh
-go get github.com/Paymentbox-com/grpc-service-mesh-go@v0.3.0
+go get github.com/Paymentbox-com/grpc-service-mesh-go@v0.4.0
 ```
 
 The library imports `github.com/Paymentbox-com/service-mesh-go/mesh`, `google.golang.org/protobuf`, and 
@@ -476,8 +478,8 @@ the detail types in `google/rpc/error_details.proto`, such as `Google::Rpc::Erro
 
 ```ruby
 # Gemfile
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.2.0"
-gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.2.0"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.3.0"
+gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.2.1"
 gem "googleapis-common-protos-types"
 gem "service_mesh_nats", git: "https://github.com/Paymentbox-com/service-mesh-nats-ruby", tag: "v0.2.0"
 ```
