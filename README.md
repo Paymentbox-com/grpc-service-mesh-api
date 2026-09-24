@@ -160,10 +160,10 @@ definitions/
 The generator is the Go program `grpc-service-mesh-gen` in this repository:
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.0
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.1
 ```
 
-or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.0`
+or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.1`
 with the same flags. `grpc-service-mesh-gen --help` describes every flag.
 
 One command generates everything for a definitions project:
@@ -177,6 +177,13 @@ Ruby into `lib/ruby`), a `protoc` run that writes one `FileDescriptorSet` for th
 `--include_imports --include_source_info`, and the mesh generator over that set. Embedded copies of `mesh/options.proto` 
 and `google/rpc/*.proto` are added to `--proto_path`, so a definitions project need not vendor them. `protoc` and 
 `protoc-gen-go` are found on `PATH`.
+
+`--go-out <dir>` and `--ruby-out <dir>` place one language's output at that directory in place of `<out>/go` or 
+`<out>/ruby`; `--out` stays the default for both. Each applies only to a language named in `--lang`:
+
+```sh
+grpc-service-mesh-gen --definitions definitions --go-out go/gen --ruby-out ruby/lib --lang go,ruby
+```
 
 The message runs treat this specification's own files as follows. `google/rpc/*.proto` are left out in both languages; 
 their compiled forms come from the published packages, `google.golang.org/genproto/googleapis/rpc` in Go and the 
@@ -214,6 +221,46 @@ directory that declares a `service`, every file that declares a message, enum, e
 package. In Ruby it is the `ruby_package` option when set, honoured the same 
 way protoc's Ruby generator honours it, and otherwise the module derived from the proto package.
 
+### Root package
+
+A definitions project spread over several directories produces one generated package per directory, and an 
+application refers to each by its own import path or module. `--go-root-package <import path[;name]>` and 
+`--ruby-root-module <Module>` each add one file at the language's output root that re-exports every generated 
+identifier an application uses under one flat namespace. The per-directory packages remain the packages the message 
+types and services belong to, and a root alias is the same type or value under a second name, so what goes on the 
+wire is the directory package's message.
+
+```sh
+grpc-service-mesh-gen --definitions definitions --out lib --lang go,ruby \
+    --go-root-package "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh" --ruby-root-module PmtboxMesh
+```
+
+In Go the file is `<go out>/<name>.grpcmesh.go` with `package <name>`, where `<name>` is the last element of the 
+import path unless given after `;` as in `go_package`. It imports every directory package that has generated code, as 
+a blank import when nothing from a package is aliased so that its `init` registration is linked, and declares 
+`type <Name> = <pkg>.<Name>` for every message type, nested ones included under protoc-gen-go's names such as 
+`Outer_Inner`, and every enum type; `const <Value> = <pkg>.<Value>` for every enum value constant; and, for each 
+service, `type <Service> = <pkg>.<Service>`, `var <Name>Client = <pkg>.<Name>Client`, and 
+`var <Name>Targets = <pkg>.<Name>Targets`. The Go identifiers are the ones protoc-gen-go generates, computed with its 
+own front end. The `servicemaps` package stays at `<go out>/servicemaps` and is imported by its own path.
+
+In Ruby the file is `<ruby out>/<snake_case(Module)>_grpcmesh.rb`, for `PmtboxMesh` `pmtbox_mesh_grpcmesh.rb`. It 
+requires every generated Ruby file by load-path name (the message files, each `<dir>_grpcmesh.rb`, `service_maps.rb`, 
+and `mesh/options_pb.rb`) and defines `module <Module>` with `<Name> = ::<GeneratedModule>::<Name>` for every 
+top-level message class, every top-level enum module, and each RPCService class, client class, and targets module, 
+plus `ServiceMaps = ::ServiceMaps`. Nested messages and enums are reached through their parent constant. The generated 
+module is the one protoc's Ruby generator uses, `ruby_package` when set and otherwise the PascalCased proto package.
+
+The root file requires every aliased Go identifier, or Ruby constant, to be unique across the whole definitions tree. 
+Two directories that both generate `ApiKey` are a generator error naming the identifier and both source files. A root 
+package name equal to a directory package name, or a root module equal to a generated module (`Pbx`) or to 
+`ServiceMaps`, is an error as well. With the root options set, the example under Usage also writes:
+
+```
+lib/go/pmtboxmesh.grpcmesh.go       package pmtboxmesh: ApiKey, ApiKeyService, ApiKeyClient, ApiKeyTargets
+lib/ruby/pmtbox_mesh_grpcmesh.rb    PmtboxMesh::ApiKey, ::ApiKeyService, ::ApiKeyClient, ::ApiKeyTargets, ::ServiceMaps
+```
+
 ### Generator errors
 
 The generator stops with an error when:
@@ -225,6 +272,10 @@ The generator stops with an error when:
 * an `rpc` method streams in either direction
 * Go is requested and, in a directory that declares a `service`, a file that declares a message, enum, extension, or 
   service sets no `go_package`, or two files set different values
+* a root package is requested and two files generate the same Go identifier, or the same Ruby constant; the error 
+  names the identifier and both files
+* the Go root package's name equals a directory package's name, or the Ruby root module equals a generated module or 
+  `ServiceMaps`
 
 ### Targets
 
@@ -392,10 +443,10 @@ transport of the application's choice. The versions below are the current tags.
 ### The generator
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.0
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.1
 ```
 
-or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.0` 
+or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.1` 
 with the same flags. The generator runs `protoc` and, when Go is requested, `protoc-gen-go`, both found on `PATH`:
 
 ```sh
