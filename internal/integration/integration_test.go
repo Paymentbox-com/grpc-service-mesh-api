@@ -30,6 +30,35 @@ func generate(t *testing.T) string {
 	return out
 }
 
+// generateWithRoots generates a copy of examples/pbx whose go_package is a
+// directory package of the root module, with both root options set.
+func generateWithRoots(t *testing.T) string {
+	t.Helper()
+	if os.Getenv("GRPC_SERVICE_MESH_GEN_INTEGRATION") == "" {
+		t.Skip("set GRPC_SERVICE_MESH_GEN_INTEGRATION=1 to run")
+	}
+	defs := filepath.Join(t.TempDir(), "definitions")
+	if err := os.MkdirAll(filepath.Join(defs, "pbx"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"api_key.proto", "deployment.proto"} {
+		b, err := os.ReadFile(filepath.Join(repoRoot, "examples", "pbx", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := strings.Replace(string(b), `option go_package = "github.com/Paymentbox-com/pbx";`, `option go_package = "github.com/Paymentbox-com/pmtbox_mesh/pbx";`, 1)
+		write(t, filepath.Join(defs, "pbx", name), src)
+	}
+	out := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	args := []string{"--definitions", defs, "--out", out, "--lang", "go,ruby",
+		"--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", "--ruby-root-module", "PmtboxMesh"}
+	if code := cli.Run(args, &stdout, &stderr); code != 0 {
+		t.Fatalf("generator exited %d:\n%s", code, stderr.String())
+	}
+	return out
+}
+
 func sh(t *testing.T, dir string, name string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command(name, args...)
@@ -112,6 +141,72 @@ raise "rpcs: #{Pbx::ApiKeyService.rpcs.keys}" unless Pbx::ApiKeyService.rpcs.key
 puts "loaded"
 `
 	got := sh(t, ruby, "bundle", "exec", "ruby", "-I"+ruby, "-e", script)
+	if strings.TrimSpace(got) != "loaded" {
+		t.Fatalf("ruby output:\n%s", got)
+	}
+}
+
+// TestGoRootPackageVets builds the Go output as one module: the root
+// package at its root, the pbx directory package and servicemaps under it.
+func TestGoRootPackageVets(t *testing.T) {
+	out := generateWithRoots(t)
+	root, err := filepath.Abs(repoRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goOut := filepath.Join(out, "go")
+	write(t, filepath.Join(goOut, "go.mod"), `module github.com/Paymentbox-com/pmtbox_mesh
+
+go 1.26.6
+
+require (
+	github.com/Paymentbox-com/grpc-service-mesh-api v0.0.0
+	github.com/Paymentbox-com/grpc-service-mesh-go v0.1.1
+	github.com/Paymentbox-com/service-mesh-go v0.1.0
+	google.golang.org/protobuf v1.36.12
+)
+
+replace github.com/Paymentbox-com/grpc-service-mesh-api => `+root+`
+`)
+	write(t, filepath.Join(goOut, "use_test.go"), `package pmtboxmesh
+
+import "testing"
+
+func TestAliases(t *testing.T) {
+	if ApiKeyTargets.Search.Segments[2] != "Search" {
+		t.Fatal(ApiKeyTargets.Search)
+	}
+	var _ ApiKeyService
+	var _ *ApiKey
+	_ = ApiKeyClient.Search
+}
+`)
+	sh(t, goOut, "go", "mod", "tidy")
+	sh(t, goOut, "go", "vet", "./...")
+	sh(t, goOut, "go", "test", "./...")
+}
+
+// TestRubyRootModuleLoads requires the root file against the published gems
+// and reads the aliases back.
+func TestRubyRootModuleLoads(t *testing.T) {
+	out := generateWithRoots(t)
+	ruby := filepath.Join(out, "ruby")
+	write(t, filepath.Join(ruby, "Gemfile"), `source "https://rubygems.org"
+
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.1.0"
+gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.2.0"
+gem "google-protobuf"
+gem "googleapis-common-protos-types"
+`)
+	sh(t, ruby, "bundle", "install", "--quiet")
+	script := `require "pmtbox_mesh_grpcmesh"
+raise "no search" unless PmtboxMesh::ApiKeyClient.respond_to?(:search)
+raise "ApiKey" unless PmtboxMesh::ApiKey.equal?(Pbx::ApiKey)
+raise "targets" unless PmtboxMesh::ApiKeyTargets::SEARCH.segments == ["pbx", "ApiKeyService", "Search"]
+raise "service maps" unless PmtboxMesh::ServiceMaps::NATS.targets.size == 2
+puts "loaded"
+`
+	got := sh(t, ruby, "bundle", "exec", "ruby", "-W", "-I"+ruby, "-e", script)
 	if strings.TrimSpace(got) != "loaded" {
 		t.Fatalf("ruby output:\n%s", got)
 	}
