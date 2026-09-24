@@ -481,7 +481,7 @@ the detail types in `google/rpc/error_details.proto`, such as `Google::Rpc::Erro
 gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.4.0"
 gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.3.0"
 gem "googleapis-common-protos-types"
-gem "service_mesh_nats", git: "https://github.com/Paymentbox-com/service-mesh-nats-ruby", tag: "v0.4.0"
+gem "service_mesh_nats", git: "https://github.com/Paymentbox-com/service-mesh-nats-ruby", tag: "v0.4.1"
 ```
 
 `service_mesh_nats` is the NATS transport; another transport gem takes its place in an application that uses a 
