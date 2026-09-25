@@ -78,7 +78,7 @@ func TestRun_GoOutWithSeparateValue(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
-	if _, err := os.Stat(filepath.Join(goOut, "pbx", "api_key.pb.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(goOut, "shop", "order.pb.go")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -89,35 +89,35 @@ func TestRun_RubyOutWithSeparateValue(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
-	if _, err := os.Stat(filepath.Join(rubyOut, "pbx", "api_key_pb.rb")); err != nil {
+	if _, err := os.Stat(filepath.Join(rubyOut, "shop", "order_pb.rb")); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestRun_GoRootPackageWithoutGoOutIsAUsageError(t *testing.T) {
-	code, _, stderr := invoke(t, "--definitions", examples, "--ruby_out="+t.TempDir(), "--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh")
+	code, _, stderr := invoke(t, "--definitions", examples, "--ruby_out="+t.TempDir(), "--go-root-package", "example.com/definitions;definitions")
 	if code != 2 || stderr != "grpc-service-mesh-gen: --go-root-package applies to Go, which needs --go_out (see --help)\n" {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
 }
 
 func TestRun_RubyRootModuleWithoutRubyOutIsAUsageError(t *testing.T) {
-	code, _, stderr := invoke(t, "--definitions", examples, "--go_out="+t.TempDir(), "--ruby-root-module", "PmtboxMesh")
+	code, _, stderr := invoke(t, "--definitions", examples, "--go_out="+t.TempDir(), "--ruby-root-module", "Definitions")
 	if code != 2 || stderr != "grpc-service-mesh-gen: --ruby-root-module applies to Ruby, which needs --ruby_out (see --help)\n" {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
 }
 
 func TestRun_InvalidGoRootPackageIsAUsageError(t *testing.T) {
-	code, _, stderr := invoke(t, "--definitions", examples, "--go_out="+t.TempDir(), "--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtbox-mesh")
-	if code != 2 || !strings.Contains(stderr, `--go-root-package: "pmtbox-mesh" is not a Go package name`) {
+	code, _, stderr := invoke(t, "--definitions", examples, "--go_out="+t.TempDir(), "--go-root-package", "example.com/definitions;my-definitions")
+	if code != 2 || !strings.Contains(stderr, `--go-root-package: "my-definitions" is not a Go package name`) {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
 }
 
 func TestRun_InvalidRubyRootModuleIsAUsageError(t *testing.T) {
-	code, _, stderr := invoke(t, "--definitions", examples, "--ruby_out="+t.TempDir(), "--ruby-root-module", "pmtbox_mesh")
-	if code != 2 || !strings.Contains(stderr, `--ruby-root-module: "pmtbox_mesh" is not a Ruby module name`) {
+	code, _, stderr := invoke(t, "--definitions", examples, "--ruby_out="+t.TempDir(), "--ruby-root-module", "definitions")
+	if code != 2 || !strings.Contains(stderr, `--ruby-root-module: "definitions" is not a Ruby module name`) {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
 }
@@ -135,7 +135,7 @@ func TestRun_GoOutAloneGeneratesOnlyGo(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
-	want := []string{"go/pbx/api_key.pb.go", "go/pbx/deployment.pb.go", "go/pbx/pbx.grpcmesh.go", "go/servicemaps/servicemaps.go"}
+	want := []string{"go/servicemaps/servicemaps.go", "go/shop/deployment.pb.go", "go/shop/order.pb.go", "go/shop/shop.grpcmesh.go"}
 	if got := files(t, parent); !slices.Equal(got, want) {
 		t.Fatalf("wrote %v, want %v", got, want)
 	}
@@ -150,7 +150,7 @@ func TestRun_RubyOutAloneGeneratesOnlyRuby(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
-	want := []string{"ruby/pbx/api_key_pb.rb", "ruby/pbx/deployment_pb.rb", "ruby/pbx/pbx_grpcmesh.rb", "ruby/service_maps.rb"}
+	want := []string{"ruby/service_maps.rb", "ruby/shop/deployment_pb.rb", "ruby/shop/order_pb.rb", "ruby/shop/shop_grpcmesh.rb"}
 	if got := files(t, parent); !slices.Equal(got, want) {
 		t.Fatalf("wrote %v, want %v", got, want)
 	}
@@ -162,11 +162,11 @@ func TestRun_RubyOutAloneGeneratesOnlyRuby(t *testing.T) {
 func TestRun_RootFilesWrittenAtTheOutputDirectories(t *testing.T) {
 	goOut, rubyOut := t.TempDir(), t.TempDir()
 	code, _, stderr := invoke(t, "--definitions", examples, "--go_out="+goOut, "--ruby_out="+rubyOut,
-		"--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", "--ruby-root-module", "PmtboxMesh")
+		"--go-root-package", "example.com/definitions;definitions", "--ruby-root-module", "Definitions")
 	if code != 0 {
 		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
-	for _, p := range []string{filepath.Join(goOut, "pmtboxmesh.grpcmesh.go"), filepath.Join(rubyOut, "pmtbox_mesh_grpcmesh.rb")} {
+	for _, p := range []string{filepath.Join(goOut, "definitions.grpcmesh.go"), filepath.Join(rubyOut, "definitions_grpcmesh.rb")} {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("%v", err)
 		}
@@ -175,9 +175,9 @@ func TestRun_RootFilesWrittenAtTheOutputDirectories(t *testing.T) {
 
 func TestRun_RootPackageErrorExitsOne(t *testing.T) {
 	out := t.TempDir()
-	code, _, stderr := invoke(t, "--definitions", examples, "--go_out="+out, "--go-root-package", "github.com/Paymentbox-com/pbx")
-	want := "grpc-service-mesh-gen: root package pbx: pbx/api_key.proto generates a package with the same name\n" +
-		"root package pbx: pbx/deployment.proto generates a package with the same name\n"
+	code, _, stderr := invoke(t, "--definitions", examples, "--go_out="+out, "--go-root-package", "example.com/definitions/shop")
+	want := "grpc-service-mesh-gen: root package shop: shop/deployment.proto generates a package with the same name\n" +
+		"root package shop: shop/order.proto generates a package with the same name\n"
 	if code != 1 || stderr != want {
 		t.Fatalf("code %d, stderr:\n%s", code, stderr)
 	}
@@ -185,22 +185,22 @@ func TestRun_RootPackageErrorExitsOne(t *testing.T) {
 
 func TestRun_GeneratorErrorExitsOne(t *testing.T) {
 	defs := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(defs, "pbx"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(defs, "shop"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	src := `syntax = "proto3";
-package pbx;
+package shop;
 import "mesh/options.proto";
-message ApiKey {}
-service ApiKeyService { rpc Watch(ApiKey) returns (stream ApiKey); }
+message Order {}
+service OrderService { rpc Watch(Order) returns (stream Order); }
 `
-	if err := os.WriteFile(filepath.Join(defs, "pbx", "api_key.proto"), []byte(src), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(defs, "shop", "order.proto"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := t.TempDir()
 	code, _, stderr := invoke(t, "--definitions", defs, "--go_out="+filepath.Join(out, "go"), "--ruby_out="+filepath.Join(out, "ruby"))
-	want := "grpc-service-mesh-gen: pbx: no file sets transport; exactly one file directly in pbx/ must set option (mesh.transport)\n" +
-		"pbx/api_key.proto: ApiKeyService.Watch streams; a streaming rpc has no Service Mesh API form\n"
+	want := "grpc-service-mesh-gen: shop: no file sets transport; exactly one file directly in shop/ must set option (mesh.transport)\n" +
+		"shop/order.proto: OrderService.Watch streams; a streaming rpc has no Service Mesh API form\n"
 	if code != 1 || stderr != want {
 		t.Fatalf("code %d, stderr:\n%s", code, stderr)
 	}
@@ -226,16 +226,16 @@ func TestRun_DefinitionsRunsProtocAndWritesEverything(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code %d, stderr:\n%s", code, stderr)
 	}
-	if got, want := files(t, goOut), []string{"pbx/api_key.pb.go", "pbx/deployment.pb.go", "pbx/pbx.grpcmesh.go", "servicemaps/servicemaps.go"}; !slices.Equal(got, want) {
+	if got, want := files(t, goOut), []string{"servicemaps/servicemaps.go", "shop/deployment.pb.go", "shop/order.pb.go", "shop/shop.grpcmesh.go"}; !slices.Equal(got, want) {
 		t.Errorf("Go wrote %v, want %v", got, want)
 	}
-	if got, want := files(t, rubyOut), []string{"pbx/api_key_pb.rb", "pbx/deployment_pb.rb", "pbx/pbx_grpcmesh.rb", "service_maps.rb"}; !slices.Equal(got, want) {
+	if got, want := files(t, rubyOut), []string{"service_maps.rb", "shop/deployment_pb.rb", "shop/order_pb.rb", "shop/shop_grpcmesh.rb"}; !slices.Equal(got, want) {
 		t.Errorf("Ruby wrote %v, want %v", got, want)
 	}
 	for _, want := range []string{
 		"--include_imports --include_source_info --descriptor_set_out=",
-		"--go_out=" + goOut + " --go_opt=paths=source_relative pbx/api_key.proto pbx/deployment.proto\n",
-		"--ruby_out=" + rubyOut + " pbx/api_key.proto pbx/deployment.proto\n",
+		"--go_out=" + goOut + " --go_opt=paths=source_relative shop/deployment.proto shop/order.proto\n",
+		"--ruby_out=" + rubyOut + " shop/deployment.proto shop/order.proto\n",
 		"wrote " + filepath.Join(rubyOut, "service_maps.rb"),
 	} {
 		if !strings.Contains(stdout, want) {
@@ -249,12 +249,12 @@ func TestRun_DefinitionsRunsProtocAndWritesEverything(t *testing.T) {
 
 func TestRun_CopiesOfPublishedFilesAreSkippedInMessageRuns(t *testing.T) {
 	defs := t.TempDir()
-	for _, p := range []string{"pbx/api_key.proto", "pbx/deployment.proto"} {
+	for _, p := range []string{"shop/order.proto", "shop/deployment.proto"} {
 		b, err := os.ReadFile(filepath.Join(repoRoot, "examples", filepath.FromSlash(p)))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.MkdirAll(filepath.Join(defs, "pbx"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(defs, "shop"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(defs, filepath.FromSlash(p)), b, 0o644); err != nil {
@@ -283,10 +283,10 @@ func TestRun_CopiesOfPublishedFilesAreSkippedInMessageRuns(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code %d, stderr:\n%s", code, stderr)
 	}
-	if !strings.Contains(stdout, "--go_opt=paths=source_relative pbx/api_key.proto pbx/deployment.proto\n") {
+	if !strings.Contains(stdout, "--go_opt=paths=source_relative shop/deployment.proto shop/order.proto\n") {
 		t.Errorf("Go run did not skip the published files:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "--ruby_out="+filepath.Join(out, "ruby")+" pbx/api_key.proto pbx/deployment.proto\n") {
+	if !strings.Contains(stdout, "--ruby_out="+filepath.Join(out, "ruby")+" shop/deployment.proto shop/order.proto\n") {
 		t.Errorf("Ruby run did not skip the published files:\n%s", stdout)
 	}
 	for _, p := range []string{"go/google", "go/mesh", "ruby/google", "ruby/mesh"} {
@@ -296,7 +296,7 @@ func TestRun_CopiesOfPublishedFilesAreSkippedInMessageRuns(t *testing.T) {
 	}
 }
 
-// TestRun_MessageOutputIsWhatPlainProtocWrites compiles examples/pbx with
+// TestRun_MessageOutputIsWhatPlainProtocWrites compiles examples/shop with
 // protoc directly, with -I set to the directory proto-path prints, and
 // compares every message file the generator wrote to protoc's.
 func TestRun_MessageOutputIsWhatPlainProtocWrites(t *testing.T) {
@@ -317,12 +317,12 @@ func TestRun_MessageOutputIsWhatPlainProtocWrites(t *testing.T) {
 	cmd := exec.Command("protoc", "-I", examples, "-I", strings.TrimSuffix(protoPath, "\n"),
 		"--go_out="+filepath.Join(plain, "go"), "--go_opt=paths=source_relative",
 		"--ruby_out="+filepath.Join(plain, "ruby"),
-		"pbx/api_key.proto", "pbx/deployment.proto")
+		"shop/order.proto", "shop/deployment.proto")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("protoc: %v\n%s", err, b)
 	}
 
-	want := []string{"go/pbx/api_key.pb.go", "go/pbx/deployment.pb.go", "ruby/pbx/api_key_pb.rb", "ruby/pbx/deployment_pb.rb"}
+	want := []string{"go/shop/deployment.pb.go", "go/shop/order.pb.go", "ruby/shop/deployment_pb.rb", "ruby/shop/order_pb.rb"}
 	if got := files(t, plain); !slices.Equal(got, want) {
 		t.Fatalf("plain protoc wrote %v, want %v", got, want)
 	}
@@ -407,13 +407,13 @@ func TestRun_MissingOptionsProtoIsOneErrorBeforeProtoc(t *testing.T) {
 func TestRun_MeshOnlyWritesOnlyTheMeshCode(t *testing.T) {
 	out := t.TempDir()
 	code, stdout, stderr := invoke(t, "--definitions", examples, "--go_out="+filepath.Join(out, "go"), "--ruby_out="+filepath.Join(out, "ruby"), "--mesh-only", "--verbose",
-		"--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", "--ruby-root-module", "PmtboxMesh")
+		"--go-root-package", "example.com/definitions;definitions", "--ruby-root-module", "Definitions")
 	if code != 0 {
 		t.Fatalf("code %d, stderr:\n%s", code, stderr)
 	}
 	want := []string{
-		"go/pbx/pbx.grpcmesh.go", "go/pmtboxmesh.grpcmesh.go", "go/servicemaps/servicemaps.go",
-		"ruby/pbx/pbx_grpcmesh.rb", "ruby/pmtbox_mesh_grpcmesh.rb", "ruby/service_maps.rb",
+		"go/definitions.grpcmesh.go", "go/servicemaps/servicemaps.go", "go/shop/shop.grpcmesh.go",
+		"ruby/definitions_grpcmesh.rb", "ruby/service_maps.rb", "ruby/shop/shop_grpcmesh.rb",
 	}
 	if got := files(t, out); !slices.Equal(got, want) {
 		t.Fatalf("wrote %v, want %v", got, want)
@@ -449,14 +449,14 @@ func TestRun_ProtoPathTakesNoArguments(t *testing.T) {
 
 func TestRun_ProtocErrorPassesThrough(t *testing.T) {
 	defs := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(defs, "pbx"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(defs, "shop"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(defs, "pbx", "api_key.proto"), []byte("syntax = \"proto3\";\nimport \"pbx/missing.proto\";\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(defs, "shop", "order.proto"), []byte("syntax = \"proto3\";\nimport \"shop/missing.proto\";\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	code, _, stderr := invoke(t, "--definitions", defs, "--go_out="+t.TempDir(), "--ruby_out="+t.TempDir())
-	if code != 1 || !strings.Contains(stderr, "pbx/missing.proto: File not found.") {
+	if code != 1 || !strings.Contains(stderr, "shop/missing.proto: File not found.") {
 		t.Fatalf("code %d, stderr:\n%s", code, stderr)
 	}
 }

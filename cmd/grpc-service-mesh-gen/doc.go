@@ -18,7 +18,7 @@
 // proto-path prints the specification directory, the directory holding
 // mesh/options.proto at this generator's version, and exits 0, or prints the
 // error and exits 1. A release build, installed or run at a version such as
-// @v0.5.0, takes the directory of that version of
+// @v0.5.1, takes the directory of that version of
 // github.com/Paymentbox-com/grpc-service-mesh-api from the Go module cache
 // with go mod download -json. A development build, whose version is (devel)
 // or ends in +dirty, takes the root of the working directory's module from

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package shop;
+
+import "mesh/options.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "example.com/definitions/shop";
+
+message Order {
+  optional string id = 1;
+  optional string item = 2;
+}
+
+service OrderService {
+  rpc Place(Order) returns (Order);
+  rpc Placed(Order) returns (google.protobuf.Empty) {
+    option (mesh.kind) = TOPIC;
+    option (mesh.consumer_group) = "audit";
+  }
+}

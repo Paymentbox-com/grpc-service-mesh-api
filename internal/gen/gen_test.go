@@ -8,10 +8,10 @@ import (
 
 func TestRender_OneFilePerDirectoryPlusServiceMapsPerLanguage(t *testing.T) {
 	m := analyze(t, map[string]string{
-		"pbx/deployment.proto": pbxDeployment,
-		"pbx/api_key.proto":    pbxService,
-		"pbx/internal/audit.proto": header + `package pbx.internal;
-option go_package = "github.com/Paymentbox-com/pbx/internal";
+		"shop/deployment.proto": shopDeployment,
+		"shop/order.proto":      shopService,
+		"shop/internal/audit.proto": header + `package shop.internal;
+option go_package = "example.com/definitions/shop/internal";
 message Entry {}
 service AuditService { rpc Record(Entry) returns (Entry); }
 `,
@@ -25,8 +25,8 @@ service AuditService { rpc Record(Entry) returns (Entry); }
 		got = append(got, string(o.Lang)+"/"+o.Path)
 	}
 	want := []string{
-		"go/pbx/pbx.grpcmesh.go", "go/pbx/internal/internal.grpcmesh.go", "go/servicemaps/servicemaps.go",
-		"ruby/pbx/pbx_grpcmesh.rb", "ruby/pbx/internal/internal_grpcmesh.rb", "ruby/service_maps.rb",
+		"go/shop/shop.grpcmesh.go", "go/shop/internal/internal.grpcmesh.go", "go/servicemaps/servicemaps.go",
+		"ruby/shop/shop_grpcmesh.rb", "ruby/shop/internal/internal_grpcmesh.rb", "ruby/service_maps.rb",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("outputs %v", got)
@@ -39,7 +39,7 @@ service AuditService { rpc Record(Entry) returns (Entry); }
 }
 
 func TestRender_OnlyRequestedLanguage(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
+	m := analyze(t, map[string]string{"shop/deployment.proto": shopDeployment, "shop/order.proto": shopService})
 	outs, err := Render(m, Options{Langs: []Lang{Ruby}})
 	if err != nil {
 		t.Fatal(err)
@@ -50,8 +50,8 @@ func TestRender_OnlyRequestedLanguage(t *testing.T) {
 }
 
 func TestRender_RootFilesAtEachLanguageRoot(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
-	outs, err := Render(m, Options{Langs: []Lang{Go, Ruby}, GoRootPackage: "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", RubyRootModule: "PmtboxMesh"})
+	m := analyze(t, map[string]string{"shop/deployment.proto": shopDeployment, "shop/order.proto": shopService})
+	outs, err := Render(m, Options{Langs: []Lang{Go, Ruby}, GoRootPackage: "example.com/definitions;definitions", RubyRootModule: "Definitions"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,8 +60,8 @@ func TestRender_RootFilesAtEachLanguageRoot(t *testing.T) {
 		got = append(got, string(o.Lang)+"/"+o.Path)
 	}
 	want := []string{
-		"go/pbx/pbx.grpcmesh.go", "go/servicemaps/servicemaps.go", "go/pmtboxmesh.grpcmesh.go",
-		"ruby/pbx/pbx_grpcmesh.rb", "ruby/service_maps.rb", "ruby/pmtbox_mesh_grpcmesh.rb",
+		"go/shop/shop.grpcmesh.go", "go/servicemaps/servicemaps.go", "go/definitions.grpcmesh.go",
+		"ruby/shop/shop_grpcmesh.rb", "ruby/service_maps.rb", "ruby/definitions_grpcmesh.rb",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("outputs %v", got)
@@ -74,27 +74,27 @@ func TestRender_RootFilesAtEachLanguageRoot(t *testing.T) {
 }
 
 func TestRender_RootFileOnlyForItsOwnLanguage(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
-	outs, err := Render(m, Options{Langs: []Lang{Ruby}, GoRootPackage: "github.com/Paymentbox-com/pmtbox_mesh"})
+	m := analyze(t, map[string]string{"shop/deployment.proto": shopDeployment, "shop/order.proto": shopService})
+	outs, err := Render(m, Options{Langs: []Lang{Ruby}, GoRootPackage: "example.com/definitions"})
 	if err != nil || len(outs) != 2 {
 		t.Fatalf("outputs %+v, err %v", outs, err)
 	}
 }
 
 func TestRender_RootErrorStopsEveryOutput(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
-	outs, err := Render(m, Options{Langs: []Lang{Go, Ruby}, GoRootPackage: "github.com/Paymentbox-com/pbx", RubyRootModule: "PmtboxMesh"})
-	if outs != nil || err == nil || err.Error() != "root package pbx: pbx/api_key.proto generates a package with the same name\n"+
-		"root package pbx: pbx/deployment.proto generates a package with the same name" {
+	m := analyze(t, map[string]string{"shop/deployment.proto": shopDeployment, "shop/order.proto": shopService})
+	outs, err := Render(m, Options{Langs: []Lang{Go, Ruby}, GoRootPackage: "example.com/definitions/shop", RubyRootModule: "Definitions"})
+	if outs != nil || err == nil || err.Error() != "root package shop: shop/deployment.proto generates a package with the same name\n"+
+		"root package shop: shop/order.proto generates a package with the same name" {
 		t.Fatalf("outputs %+v, err %v", outs, err)
 	}
 }
 
 func TestRender_GoNeedsGoPackageInEveryDefinitionsFile(t *testing.T) {
 	m := analyze(t, map[string]string{
-		"pbx/deployment.proto": pbxDeployment,
-		"pbx/api_key.proto":    pbxService,
-		"common/id.proto":      "syntax = \"proto3\";\npackage common;\nmessage Id {}\n",
+		"shop/deployment.proto": shopDeployment,
+		"shop/order.proto":      shopService,
+		"common/id.proto":       "syntax = \"proto3\";\npackage common;\nmessage Id {}\n",
 	})
 	outs, err := Render(m, Options{Langs: []Lang{Ruby, Go}})
 	if outs != nil || err == nil || err.Error() != "common/id.proto: go_package is not set; every definitions file sets go_package when Go is requested" {
@@ -104,8 +104,8 @@ func TestRender_GoNeedsGoPackageInEveryDefinitionsFile(t *testing.T) {
 
 func TestRender_RubyDoesNotNeedGoPackage(t *testing.T) {
 	m := analyze(t, map[string]string{
-		"pbx/deployment.proto": pbxDeployment,
-		"pbx/api_key.proto":    header + "package pbx;\nmessage ApiKey {}\nservice ApiKeyService { rpc Search(ApiKey) returns (ApiKey); }\n",
+		"shop/deployment.proto": shopDeployment,
+		"shop/order.proto":      header + "package shop;\nmessage Order {}\nservice OrderService { rpc Place(Order) returns (Order); }\n",
 	})
 	outs, err := Render(m, Options{Langs: []Lang{Ruby}})
 	if err != nil || len(outs) != 2 {
@@ -118,12 +118,12 @@ func TestWrite_PutsFilesUnderEachLanguageRoot(t *testing.T) {
 	roots := map[Lang]string{Go: filepath.Join(out, "golang"), Ruby: filepath.Join(out, "rb")}
 	paths, err := Write(roots, []Output{
 		{Lang: Ruby, Path: "service_maps.rb", Content: []byte("ruby")},
-		{Lang: Go, Path: "pbx/pbx.grpcmesh.go", Content: []byte("go")},
+		{Lang: Go, Path: "shop/shop.grpcmesh.go", Content: []byte("go")},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 2 || paths[0] != filepath.Join(out, "rb", "service_maps.rb") || paths[1] != filepath.Join(out, "golang", "pbx", "pbx.grpcmesh.go") {
+	if len(paths) != 2 || paths[0] != filepath.Join(out, "rb", "service_maps.rb") || paths[1] != filepath.Join(out, "golang", "shop", "shop.grpcmesh.go") {
 		t.Fatalf("paths %v", paths)
 	}
 	b, err := os.ReadFile(paths[1])

@@ -1,0 +1,9 @@
+// Directory-wide settings for the shop deployment group.
+syntax = "proto3";
+
+package shop;
+
+import "mesh/options.proto";
+
+option go_package = "example.com/definitions/shop";
+option (mesh.transport) = "nats";

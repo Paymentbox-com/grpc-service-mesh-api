@@ -81,17 +81,17 @@ func mustNotContain(t *testing.T, got, want string) {
 
 const header = "syntax = \"proto3\";\nimport \"mesh/options.proto\";\n"
 
-// pbxDeployment is the settings file of the pbx directory used by most fixtures.
-const pbxDeployment = header + "package pbx;\noption go_package = \"github.com/Paymentbox-com/pbx\";\noption (mesh.transport) = \"nats\";\n"
+// shopDeployment is the settings file of the shop directory used by most fixtures.
+const shopDeployment = header + "package shop;\noption go_package = \"example.com/definitions/shop\";\noption (mesh.transport) = \"nats\";\n"
 
-// pbxService declares pbx.ApiKeyService with a ROUTE and a TOPIC method.
-const pbxService = header + `package pbx;
+// shopService declares shop.OrderService with a ROUTE and a TOPIC method.
+const shopService = header + `package shop;
 import "google/protobuf/empty.proto";
-option go_package = "github.com/Paymentbox-com/pbx";
-message ApiKey { string first_name = 1; }
-service ApiKeyService {
-  rpc Search(ApiKey) returns (ApiKey);
-  rpc Created(ApiKey) returns (google.protobuf.Empty) {
+option go_package = "example.com/definitions/shop";
+message Order { string id = 1; }
+service OrderService {
+  rpc Place(Order) returns (Order);
+  rpc Placed(Order) returns (google.protobuf.Empty) {
     option (mesh.kind) = TOPIC;
     option (mesh.consumer_group) = "audit";
   }

@@ -11,10 +11,10 @@ import (
 var rubyConstant = regexp.MustCompile(`^[A-Z][A-Za-z0-9_]*$`)
 
 // ParseRubyRootModule reads a --ruby-root-module value, one Ruby constant
-// name such as PmtboxMesh.
+// name such as Definitions.
 func ParseRubyRootModule(s string) (string, error) {
 	if !rubyConstant.MatchString(s) {
-		return "", fmt.Errorf("--ruby-root-module: %q is not a Ruby module name; one constant such as PmtboxMesh is expected", s)
+		return "", fmt.Errorf("--ruby-root-module: %q is not a Ruby module name; one constant such as Definitions is expected", s)
 	}
 	return s, nil
 }

@@ -4,11 +4,11 @@
 # One ServiceMap per transport, holding every Target served over it.
 
 require "service_mesh"
-require_relative "pbx/pbx_grpcmesh"
+require_relative "shop/shop_grpcmesh"
 
 module ServiceMaps
   NATS = ServiceMesh::ServiceMap.new(targets: [
-    Pbx::ApiKeyTargets::SEARCH,
-    Pbx::ApiKeyTargets::CREATED
+    Shop::OrderTargets::PLACE,
+    Shop::OrderTargets::PLACED
   ])
 end

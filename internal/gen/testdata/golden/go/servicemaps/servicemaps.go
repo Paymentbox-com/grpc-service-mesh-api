@@ -3,12 +3,12 @@
 package servicemaps
 
 import (
-	"github.com/Paymentbox-com/pbx"
+	"example.com/definitions/shop"
 	"github.com/Paymentbox-com/service-mesh-go/mesh"
 )
 
 // Nats holds every Target served over transport "nats".
 var Nats = mesh.ServiceMap{Targets: []mesh.Target{
-	pbx.ApiKeyTargets.Search,
-	pbx.ApiKeyTargets.Created,
+	shop.OrderTargets.Place,
+	shop.OrderTargets.Placed,
 }}

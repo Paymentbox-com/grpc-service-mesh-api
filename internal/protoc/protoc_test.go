@@ -8,7 +8,7 @@ import (
 
 func TestFindProtos_RelativeSlashPathsSorted(t *testing.T) {
 	dir := t.TempDir()
-	for _, p := range []string{"pbx/deployment.proto", "pbx/api_key.proto", "pbx/internal/audit.proto", "README.md"} {
+	for _, p := range []string{"shop/deployment.proto", "shop/order.proto", "shop/internal/audit.proto", "README.md"} {
 		full := filepath.Join(dir, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			t.Fatal(err)
@@ -21,7 +21,7 @@ func TestFindProtos_RelativeSlashPathsSorted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"pbx/api_key.proto", "pbx/deployment.proto", "pbx/internal/audit.proto"}
+	want := []string{"shop/deployment.proto", "shop/internal/audit.proto", "shop/order.proto"}
 	if len(got) != len(want) {
 		t.Fatalf("got %v", got)
 	}
@@ -49,9 +49,9 @@ func TestCheckOptions_IncludeEntryMayBeAPathList(t *testing.T) {
 func TestMessageFiles_SkipsCopiesOfThePublishedFiles(t *testing.T) {
 	got := MessageFiles([]string{
 		"google/rpc/code.proto", "google/rpc/error_details.proto", "google/rpc/status.proto",
-		"mesh/options.proto", "pbx/api_key.proto",
+		"mesh/options.proto", "shop/order.proto",
 	})
-	if len(got) != 1 || got[0] != "pbx/api_key.proto" {
+	if len(got) != 1 || got[0] != "shop/order.proto" {
 		t.Fatalf("got %v", got)
 	}
 }

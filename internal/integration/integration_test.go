@@ -1,5 +1,5 @@
 // Package integration compiles and loads the generator's output for
-// examples/pbx against the published libraries, and resolves the
+// examples/shop against the published libraries, and resolves the
 // specification directory of a published version. The tests need network
 // access, protoc, protoc-gen-go, go, and bundle, so they run only with
 // GRPC_SERVICE_MESH_GEN_INTEGRATION set.
@@ -19,46 +19,26 @@ import (
 
 var repoRoot = filepath.Join("..", "..")
 
-func generate(t *testing.T) string {
+// generate runs the generator on examples with args added.
+func generate(t *testing.T, args ...string) string {
 	t.Helper()
 	if os.Getenv("GRPC_SERVICE_MESH_GEN_INTEGRATION") == "" {
 		t.Skip("set GRPC_SERVICE_MESH_GEN_INTEGRATION=1 to run")
 	}
 	out := t.TempDir()
 	var stdout, stderr bytes.Buffer
-	if code := cli.Run([]string{"--definitions", filepath.Join(repoRoot, "examples"), "--go_out=" + filepath.Join(out, "go"), "--ruby_out=" + filepath.Join(out, "ruby")}, &stdout, &stderr); code != 0 {
+	args = append([]string{"--definitions", filepath.Join(repoRoot, "examples"), "--go_out=" + filepath.Join(out, "go"), "--ruby_out=" + filepath.Join(out, "ruby")}, args...)
+	if code := cli.Run(args, &stdout, &stderr); code != 0 {
 		t.Fatalf("generator exited %d:\n%s", code, stderr.String())
 	}
 	return out
 }
 
-// generateWithRoots generates a copy of examples/pbx whose go_package is a
-// directory package of the root module, with both root options set.
+// generateWithRoots generates examples with both root options set. The
+// go_package of examples/shop is a directory package of the root module.
 func generateWithRoots(t *testing.T) string {
 	t.Helper()
-	if os.Getenv("GRPC_SERVICE_MESH_GEN_INTEGRATION") == "" {
-		t.Skip("set GRPC_SERVICE_MESH_GEN_INTEGRATION=1 to run")
-	}
-	defs := filepath.Join(t.TempDir(), "definitions")
-	if err := os.MkdirAll(filepath.Join(defs, "pbx"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"api_key.proto", "deployment.proto"} {
-		b, err := os.ReadFile(filepath.Join(repoRoot, "examples", "pbx", name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		src := strings.Replace(string(b), `option go_package = "github.com/Paymentbox-com/pbx";`, `option go_package = "github.com/Paymentbox-com/pmtbox_mesh/pbx";`, 1)
-		write(t, filepath.Join(defs, "pbx", name), src)
-	}
-	out := t.TempDir()
-	var stdout, stderr bytes.Buffer
-	args := []string{"--definitions", defs, "--go_out=" + filepath.Join(out, "go"), "--ruby_out=" + filepath.Join(out, "ruby"),
-		"--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", "--ruby-root-module", "PmtboxMesh"}
-	if code := cli.Run(args, &stdout, &stderr); code != 0 {
-		t.Fatalf("generator exited %d:\n%s", code, stderr.String())
-	}
-	return out
+	return generate(t, "--go-root-package", "example.com/definitions;definitions", "--ruby-root-module", "Definitions")
 }
 
 func sh(t *testing.T, dir string, name string, args ...string) string {
@@ -79,12 +59,12 @@ func write(t *testing.T, path, content string) {
 	}
 }
 
-// TestGoOutputVets builds the generated pbx package as the module its
+// TestGoOutputVets builds the generated shop package as the module its
 // go_package names and the servicemaps package as a module beside it.
 func TestGoOutputVets(t *testing.T) {
 	out := generate(t)
-	pbx := filepath.Join(out, "go", "pbx")
-	write(t, filepath.Join(pbx, "go.mod"), `module github.com/Paymentbox-com/pbx
+	shop := filepath.Join(out, "go", "shop")
+	write(t, filepath.Join(shop, "go.mod"), `module example.com/definitions/shop
 
 go 1.26.6
 
@@ -94,8 +74,8 @@ require (
 	google.golang.org/protobuf v1.36.12
 )
 `)
-	sh(t, pbx, "go", "mod", "tidy")
-	sh(t, pbx, "go", "vet", "./...")
+	sh(t, shop, "go", "mod", "tidy")
+	sh(t, shop, "go", "vet", "./...")
 
 	maps := filepath.Join(out, "go", "servicemaps")
 	write(t, filepath.Join(maps, "go.mod"), `module example.com/servicemaps
@@ -103,11 +83,11 @@ require (
 go 1.26.6
 
 require (
-	github.com/Paymentbox-com/pbx v0.0.0
+	example.com/definitions/shop v0.0.0
 	github.com/Paymentbox-com/service-mesh-go v0.1.0
 )
 
-replace github.com/Paymentbox-com/pbx => ../pbx
+replace example.com/definitions/shop => ../shop
 `)
 	sh(t, maps, "go", "mod", "tidy")
 	sh(t, maps, "go", "vet", "./...")
@@ -132,9 +112,9 @@ gem "googleapis-common-protos-types"
 	sh(t, ruby, "bundle", "install", "--quiet")
 	script := `require "service_maps"
 raise "targets: #{ServiceMaps::NATS.targets.size}" unless ServiceMaps::NATS.targets.size == 2
-raise "no search" unless Pbx::ApiKeyClient.respond_to?(:search)
-raise "no created" unless Pbx::ApiKeyClient.respond_to?(:created)
-raise "rpcs: #{Pbx::ApiKeyService.rpcs.keys}" unless Pbx::ApiKeyService.rpcs.keys.sort == [:created, :search]
+raise "no place" unless Shop::OrderClient.respond_to?(:place)
+raise "no placed" unless Shop::OrderClient.respond_to?(:placed)
+raise "rpcs: #{Shop::OrderService.rpcs.keys}" unless Shop::OrderService.rpcs.keys.sort == [:place, :placed]
 options = $LOADED_FEATURES.grep(%r{/mesh/options_pb\.rb\z})
 raise "mesh/options_pb from #{options}" unless options.size == 1 && options[0].end_with?("/lib/mesh/options_pb.rb") && options[0].include?("grpc-service-mesh-ruby")
 puts "loaded"
@@ -146,11 +126,11 @@ puts "loaded"
 }
 
 // TestGoRootPackageVets builds the Go output as one module: the root
-// package at its root, the pbx directory package and servicemaps under it.
+// package at its root, the shop directory package and servicemaps under it.
 func TestGoRootPackageVets(t *testing.T) {
 	out := generateWithRoots(t)
 	goOut := filepath.Join(out, "go")
-	write(t, filepath.Join(goOut, "go.mod"), `module github.com/Paymentbox-com/pmtbox_mesh
+	write(t, filepath.Join(goOut, "go.mod"), `module example.com/definitions
 
 go 1.26.6
 
@@ -160,17 +140,17 @@ require (
 	google.golang.org/protobuf v1.36.12
 )
 `)
-	write(t, filepath.Join(goOut, "use_test.go"), `package pmtboxmesh
+	write(t, filepath.Join(goOut, "use_test.go"), `package definitions
 
 import "testing"
 
 func TestAliases(t *testing.T) {
-	if ApiKeyTargets.Search.Segments[2] != "Search" {
-		t.Fatal(ApiKeyTargets.Search)
+	if OrderTargets.Place.Segments[2] != "Place" {
+		t.Fatal(OrderTargets.Place)
 	}
-	var _ ApiKeyService
-	var _ *ApiKey
-	_ = ApiKeyClient.Search
+	var _ OrderService
+	var _ *Order
+	_ = OrderClient.Place
 }
 `)
 	sh(t, goOut, "go", "mod", "tidy")
@@ -191,11 +171,11 @@ gem "google-protobuf"
 gem "googleapis-common-protos-types"
 `)
 	sh(t, ruby, "bundle", "install", "--quiet")
-	script := `require "pmtbox_mesh_grpcmesh"
-raise "no search" unless PmtboxMesh::ApiKeyClient.respond_to?(:search)
-raise "ApiKey" unless PmtboxMesh::ApiKey.equal?(Pbx::ApiKey)
-raise "targets" unless PmtboxMesh::ApiKeyTargets::SEARCH.segments == ["pbx", "ApiKeyService", "Search"]
-raise "service maps" unless PmtboxMesh::ServiceMaps::NATS.targets.size == 2
+	script := `require "definitions_grpcmesh"
+raise "no place" unless Definitions::OrderClient.respond_to?(:place)
+raise "Order" unless Definitions::Order.equal?(Shop::Order)
+raise "targets" unless Definitions::OrderTargets::PLACE.segments == ["shop", "OrderService", "Place"]
+raise "service maps" unless Definitions::ServiceMaps::NATS.targets.size == 2
 puts "loaded"
 `
 	got := sh(t, ruby, "bundle", "exec", "ruby", "-W", "-I"+ruby, "-e", script)

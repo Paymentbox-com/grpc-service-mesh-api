@@ -3,33 +3,33 @@ package gen
 import "testing"
 
 func TestAnalyze_TransportUnset(t *testing.T) {
-	got := analyzeErr(t, map[string]string{"pbx/api_key.proto": pbxService})
-	mustContain(t, got, "pbx: no file sets transport")
+	got := analyzeErr(t, map[string]string{"shop/order.proto": shopService})
+	mustContain(t, got, "shop: no file sets transport")
 }
 
 func TestAnalyze_TransportSetTwice(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
-		"pbx/api_key.proto": pbxService,
-		"pbx/a.proto":       pbxDeployment,
-		"pbx/b.proto":       pbxDeployment,
+		"shop/order.proto": shopService,
+		"shop/a.proto":     shopDeployment,
+		"shop/b.proto":     shopDeployment,
 	})
-	mustContain(t, got, "pbx: transport is set in more than one file: pbx/a.proto, pbx/b.proto")
+	mustContain(t, got, "shop: transport is set in more than one file: shop/a.proto, shop/b.proto")
 }
 
 func TestAnalyze_DeploymentGroupConflict(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
-		"pbx/api_key.proto": pbxService,
-		"pbx/a.proto":       pbxDeployment + "option (mesh.deployment_group) = \"one\";\n",
-		"pbx/b.proto":       header + "package pbx;\noption (mesh.deployment_group) = \"two\";\n",
+		"shop/order.proto": shopService,
+		"shop/a.proto":     shopDeployment + "option (mesh.deployment_group) = \"one\";\n",
+		"shop/b.proto":     header + "package shop;\noption (mesh.deployment_group) = \"two\";\n",
 	})
-	mustContain(t, got, `pbx: deployment_group is set to different values: "one" in pbx/a.proto, "two" in pbx/b.proto`)
+	mustContain(t, got, `shop: deployment_group is set to different values: "one" in shop/a.proto, "two" in shop/b.proto`)
 }
 
 func TestAnalyze_DeploymentGroupRepeatedWithOneValueIsAllowed(t *testing.T) {
 	m := analyze(t, map[string]string{
-		"pbx/api_key.proto": pbxService,
-		"pbx/a.proto":       pbxDeployment + "option (mesh.deployment_group) = \"one\";\n",
-		"pbx/b.proto":       header + "package pbx;\noption (mesh.deployment_group) = \"one\";\n",
+		"shop/order.proto": shopService,
+		"shop/a.proto":     shopDeployment + "option (mesh.deployment_group) = \"one\";\n",
+		"shop/b.proto":     header + "package shop;\noption (mesh.deployment_group) = \"one\";\n",
 	})
 	if m.Directories[0].DeploymentGroup != "one" {
 		t.Fatalf("deployment group %q", m.Directories[0].DeploymentGroup)
@@ -38,53 +38,53 @@ func TestAnalyze_DeploymentGroupRepeatedWithOneValueIsAllowed(t *testing.T) {
 
 func TestAnalyze_TransportInNestedDirectory(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
-		"pbx/api_key.proto":           pbxService,
-		"pbx/deployment.proto":        pbxDeployment,
-		"pbx/internal/settings.proto": header + "package pbx.internal;\noption (mesh.transport) = \"http\";\n",
+		"shop/order.proto":             shopService,
+		"shop/deployment.proto":        shopDeployment,
+		"shop/internal/settings.proto": header + "package shop.internal;\noption (mesh.transport) = \"http\";\n",
 	})
-	mustContain(t, got, "pbx/internal/settings.proto: transport is set in a nested directory; only a file directly in pbx/ sets it")
+	mustContain(t, got, "shop/internal/settings.proto: transport is set in a nested directory; only a file directly in shop/ sets it")
 }
 
 func TestAnalyze_DeploymentGroupInNestedDirectory(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
-		"pbx/api_key.proto":           pbxService,
-		"pbx/deployment.proto":        pbxDeployment,
-		"pbx/internal/settings.proto": header + "package pbx.internal;\noption (mesh.deployment_group) = \"other\";\n",
+		"shop/order.proto":             shopService,
+		"shop/deployment.proto":        shopDeployment,
+		"shop/internal/settings.proto": header + "package shop.internal;\noption (mesh.deployment_group) = \"other\";\n",
 	})
-	mustContain(t, got, "pbx/internal/settings.proto: deployment_group is set in a nested directory; only a file directly in pbx/ sets it")
+	mustContain(t, got, "shop/internal/settings.proto: deployment_group is set in a nested directory; only a file directly in shop/ sets it")
 }
 
 func TestAnalyze_StreamingRPC(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
-		"pbx/deployment.proto": pbxDeployment,
-		"pbx/watch.proto": header + `package pbx;
-option go_package = "github.com/Paymentbox-com/pbx";
+		"shop/deployment.proto": shopDeployment,
+		"shop/watch.proto": header + `package shop;
+option go_package = "example.com/definitions/shop";
 message Event {}
 service WatchService { rpc Watch(Event) returns (stream Event); }
 `,
 	})
-	mustContain(t, got, "pbx/watch.proto: WatchService.Watch streams")
+	mustContain(t, got, "shop/watch.proto: WatchService.Watch streams")
 }
 
 func TestAnalyze_ServiceAtDefinitionsRoot(t *testing.T) {
-	got := analyzeErr(t, map[string]string{"api_key.proto": pbxService})
-	mustContain(t, got, "api_key.proto: a file that declares a service must live in a directory under the definitions root")
+	got := analyzeErr(t, map[string]string{"order.proto": shopService})
+	mustContain(t, got, "order.proto: a file that declares a service must live in a directory under the definitions root")
 }
 
 func TestAnalyze_TransportAtDefinitionsRoot(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
-		"deployment.proto":     pbxDeployment,
-		"pbx/api_key.proto":    pbxService,
-		"pbx/deployment.proto": pbxDeployment,
+		"deployment.proto":      shopDeployment,
+		"shop/order.proto":      shopService,
+		"shop/deployment.proto": shopDeployment,
 	})
 	mustContain(t, got, "deployment.proto: transport and deployment_group apply to a top-level directory; a file at the definitions root sets neither")
 }
 
 func TestAnalyze_FileWithoutPackage(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
-		"pbx/api_key.proto":    pbxService,
-		"pbx/deployment.proto": pbxDeployment,
-		"common/id.proto":      "syntax = \"proto3\";\nmessage Id {}\n",
+		"shop/order.proto":      shopService,
+		"shop/deployment.proto": shopDeployment,
+		"common/id.proto":       "syntax = \"proto3\";\nmessage Id {}\n",
 	})
 	if got != "common/id.proto: declares no package" {
 		t.Fatalf("got:\n%s", got)
@@ -100,35 +100,35 @@ func TestAnalyze_OptionsFileMissingFromTheSet(t *testing.T) {
 
 func TestAnalyze_MessagesOnlyFileAtRootIsAllowed(t *testing.T) {
 	m := analyze(t, map[string]string{
-		"shared.proto":         "syntax = \"proto3\";\npackage shared;\nmessage Id { string value = 1; }\n",
-		"pbx/api_key.proto":    pbxService,
-		"pbx/deployment.proto": pbxDeployment,
+		"shared.proto":          "syntax = \"proto3\";\npackage shared;\nmessage Id { string value = 1; }\n",
+		"shop/order.proto":      shopService,
+		"shop/deployment.proto": shopDeployment,
 	})
-	if len(m.Directories) != 1 || m.Directories[0].Path != "pbx" {
+	if len(m.Directories) != 1 || m.Directories[0].Path != "shop" {
 		t.Fatalf("directories %+v", m.Directories)
 	}
 }
 
 func TestAnalyze_ReportsEveryErrorOnItsOwnLine(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
-		"pbx/api_key.proto": pbxService,
+		"shop/order.proto": shopService,
 		"billing/invoice.proto": header + `package billing;
-option go_package = "github.com/Paymentbox-com/billing";
+option go_package = "example.com/definitions/billing";
 message Invoice {}
 service InvoiceService { rpc Get(Invoice) returns (Invoice); }
 `,
 	})
 	if got != "billing: no file sets transport; exactly one file directly in billing/ must set option (mesh.transport)\n"+
-		"pbx: no file sets transport; exactly one file directly in pbx/ must set option (mesh.transport)" {
+		"shop: no file sets transport; exactly one file directly in shop/ must set option (mesh.transport)" {
 		t.Fatalf("got:\n%s", got)
 	}
 }
 
 func TestAnalyze_NestedDirectoryInheritsTransportAndDeploymentGroup(t *testing.T) {
 	m := analyze(t, map[string]string{
-		"pbx/deployment.proto": pbxDeployment + "option (mesh.deployment_group) = \"pbx-prod\";\n",
-		"pbx/internal/audit.proto": header + `package pbx.internal;
-option go_package = "github.com/Paymentbox-com/pbx/internal";
+		"shop/deployment.proto": shopDeployment + "option (mesh.deployment_group) = \"shop-prod\";\n",
+		"shop/internal/audit.proto": header + `package shop.internal;
+option go_package = "example.com/definitions/shop/internal";
 message Entry {}
 service AuditService { rpc Record(Entry) returns (Entry); }
 `,
@@ -137,22 +137,22 @@ service AuditService { rpc Record(Entry) returns (Entry); }
 		t.Fatalf("directories %+v", m.Directories)
 	}
 	d := m.Directories[0]
-	if d.Path != "pbx/internal" || d.Transport != "nats" || d.DeploymentGroup != "pbx-prod" {
+	if d.Path != "shop/internal" || d.Transport != "nats" || d.DeploymentGroup != "shop-prod" {
 		t.Fatalf("directory %+v", d)
 	}
 }
 
 func TestAnalyze_DeploymentGroupDefaultsToDirectoryName(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/api_key.proto": pbxService, "pbx/deployment.proto": pbxDeployment})
-	if m.Directories[0].DeploymentGroup != "pbx" {
+	m := analyze(t, map[string]string{"shop/order.proto": shopService, "shop/deployment.proto": shopDeployment})
+	if m.Directories[0].DeploymentGroup != "shop" {
 		t.Fatalf("deployment group %q", m.Directories[0].DeploymentGroup)
 	}
 }
 
 func TestAnalyze_DeploymentGroupOverride(t *testing.T) {
 	m := analyze(t, map[string]string{
-		"pbx/api_key.proto":    pbxService,
-		"pbx/deployment.proto": pbxDeployment + "option (mesh.deployment_group) = \"payments\";\n",
+		"shop/order.proto":      shopService,
+		"shop/deployment.proto": shopDeployment + "option (mesh.deployment_group) = \"payments\";\n",
 	})
 	if m.Directories[0].DeploymentGroup != "payments" {
 		t.Fatalf("deployment group %q", m.Directories[0].DeploymentGroup)
@@ -160,23 +160,23 @@ func TestAnalyze_DeploymentGroupOverride(t *testing.T) {
 }
 
 func TestAnalyze_KindDefaultsToRouteWithoutConsumerGroup(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/api_key.proto": pbxService, "pbx/deployment.proto": pbxDeployment})
-	search := m.Directories[0].Services[0].Methods[0]
-	if search.Name != "Search" || search.Kind != Route || search.ConsumerGroup != "" {
-		t.Fatalf("method %+v", search)
+	m := analyze(t, map[string]string{"shop/order.proto": shopService, "shop/deployment.proto": shopDeployment})
+	place := m.Directories[0].Services[0].Methods[0]
+	if place.Name != "Place" || place.Kind != Route || place.ConsumerGroup != "" {
+		t.Fatalf("method %+v", place)
 	}
 }
 
 func TestAnalyze_KindTopicWithConsumerGroup(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/api_key.proto": pbxService, "pbx/deployment.proto": pbxDeployment})
-	created := m.Directories[0].Services[0].Methods[1]
-	if created.Name != "Created" || created.Kind != Topic || created.ConsumerGroup != "audit" {
-		t.Fatalf("method %+v", created)
+	m := analyze(t, map[string]string{"shop/order.proto": shopService, "shop/deployment.proto": shopDeployment})
+	placed := m.Directories[0].Services[0].Methods[1]
+	if placed.Name != "Placed" || placed.Kind != Topic || placed.ConsumerGroup != "audit" {
+		t.Fatalf("method %+v", placed)
 	}
 }
 
 func TestAnalyze_MessageReferencesCarryTheirFile(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/api_key.proto": pbxService, "pbx/deployment.proto": pbxDeployment})
+	m := analyze(t, map[string]string{"shop/order.proto": shopService, "shop/deployment.proto": shopDeployment})
 	out := m.Directories[0].Services[0].Methods[1].Output
 	want := MessageRef{FullName: "google.protobuf.Empty", Package: "google.protobuf", File: "google/protobuf/empty.proto", GoPackage: "google.golang.org/protobuf/types/known/emptypb"}
 	if out != want {
@@ -186,12 +186,12 @@ func TestAnalyze_MessageReferencesCarryTheirFile(t *testing.T) {
 
 func TestAnalyze_MessagesOnlyDirectoryGetsNoDirectory(t *testing.T) {
 	m := analyze(t, map[string]string{
-		"pbx/api_key.proto":    pbxService,
-		"pbx/deployment.proto": pbxDeployment,
-		"pbx/types/id.proto":   "syntax = \"proto3\";\npackage pbx.types;\nmessage Id {}\n",
-		"common/id.proto":      "syntax = \"proto3\";\npackage common;\nmessage Id {}\n",
+		"shop/order.proto":      shopService,
+		"shop/deployment.proto": shopDeployment,
+		"shop/types/id.proto":   "syntax = \"proto3\";\npackage shop.types;\nmessage Id {}\n",
+		"common/id.proto":       "syntax = \"proto3\";\npackage common;\nmessage Id {}\n",
 	})
-	if len(m.Directories) != 1 || m.Directories[0].Path != "pbx" {
+	if len(m.Directories) != 1 || m.Directories[0].Path != "shop" {
 		t.Fatalf("directories %+v", m.Directories)
 	}
 }

@@ -20,7 +20,7 @@ build:
 test:
     {{go}} test -race ./...
 
-# Compile and load the generated examples/pbx code against the published libraries (needs network, go, bundle)
+# Compile and load the generated examples/shop code against the published libraries (needs network, go, bundle)
 [group('build')]
 test-integration:
     GRPC_SERVICE_MESH_GEN_INTEGRATION=1 mise exec -- go test -race -count=1 ./internal/integration/...
@@ -30,7 +30,7 @@ test-integration:
 install:
     {{go}} install ./cmd/grpc-service-mesh-gen
 
-# Regenerate the golden files under internal/gen/testdata/golden from examples/pbx
+# Regenerate the golden files under internal/gen/testdata/golden from examples/shop
 [group('build')]
 gen-example:
     UPDATE_GOLDEN=1 mise exec -- go test -count=1 ./internal/gen -run TestGolden

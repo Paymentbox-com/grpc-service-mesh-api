@@ -33,7 +33,7 @@ Commands:
       failure, print the error and exit 1. Plain protoc takes it as
         -I "$(grpc-service-mesh-gen proto-path)"
       A release build, one installed or run at a version such as
-      github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.5.0,
+      github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.5.1,
       takes the directory of that module version from the Go module cache
       with go mod download -json, downloading it when needed. A development
       build, whose version is (devel) or ends in +dirty, such as go run

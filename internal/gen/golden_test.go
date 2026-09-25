@@ -7,16 +7,16 @@ import (
 	"testing"
 )
 
-// TestGolden_ExamplesPbx generates examples/pbx twice, without and with the
+// TestGolden_ExamplesShop generates examples/shop twice, without and with the
 // root package options, and compares every file to testdata/golden. The
 // directory and ServiceMaps files are the same in both runs. UPDATE_GOLDEN=1
 // rewrites the golden files instead.
-func TestGolden_ExamplesPbx(t *testing.T) {
+func TestGolden_ExamplesShop(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "set.pb")
 	cmd := exec.Command("protoc",
 		"--proto_path="+filepath.Join(repoRoot, "examples"), "--proto_path="+repoRoot,
 		"--include_imports", "--include_source_info", "--descriptor_set_out="+out,
-		"pbx/api_key.proto", "pbx/deployment.proto")
+		"shop/order.proto", "shop/deployment.proto")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("protoc: %v\n%s", err, b)
 	}
@@ -34,8 +34,8 @@ func TestGolden_ExamplesPbx(t *testing.T) {
 	}
 	rooted, err := Render(m, Options{
 		Langs:          []Lang{Go, Ruby},
-		GoRootPackage:  "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh",
-		RubyRootModule: "PmtboxMesh",
+		GoRootPackage:  "example.com/definitions;definitions",
+		RubyRootModule: "Definitions",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -49,9 +49,9 @@ func TestGolden_ExamplesPbx(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	shared := []string{"go/pbx/pbx.grpcmesh.go", "go/servicemaps/servicemaps.go", "ruby/pbx/pbx_grpcmesh.rb", "ruby/service_maps.rb"}
+	shared := []string{"go/shop/shop.grpcmesh.go", "go/servicemaps/servicemaps.go", "ruby/shop/shop_grpcmesh.rb", "ruby/service_maps.rb"}
 	compareGolden(t, golden, plain, shared)
-	compareGolden(t, golden, rooted, append(shared, "go/pmtboxmesh.grpcmesh.go", "ruby/pmtbox_mesh_grpcmesh.rb"))
+	compareGolden(t, golden, rooted, append(shared, "go/definitions.grpcmesh.go", "ruby/definitions_grpcmesh.rb"))
 }
 
 // compareGolden checks that outs are exactly the files in want and that each

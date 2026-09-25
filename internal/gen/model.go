@@ -26,7 +26,7 @@ const (
 
 // MessageRef names a message type and the file that defines it.
 type MessageRef struct {
-	FullName    string // proto full name, such as pbx.ApiKey
+	FullName    string // proto full name, such as shop.Order
 	Package     string // proto package of the defining file
 	File        string // path of the defining file, relative to the proto path
 	GoPackage   string // go_package option of the defining file

@@ -42,7 +42,7 @@ var (
 )
 
 // SnakeCase converts a CamelCase rpc name the way grpc's Ruby plugin does:
-// GetAPIKey becomes get_api_key.
+// GetHTTPStatus becomes get_http_status.
 func SnakeCase(s string) string {
 	s = snakeAcronym.ReplaceAllString(s, `${1}_${2}`)
 	s = snakeLower.ReplaceAllString(s, `${1}_${2}`)

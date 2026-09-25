@@ -21,7 +21,7 @@ const (
 )
 
 // Output is one generated file. Path is relative to the language's output
-// root, such as pbx/pbx.grpcmesh.go.
+// root, such as shop/shop.grpcmesh.go.
 type Output struct {
 	Lang    Lang
 	Path    string
