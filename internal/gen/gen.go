@@ -3,8 +3,6 @@
 package gen
 
 import (
-	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -21,42 +19,6 @@ const (
 	Go   Lang = "go"
 	Ruby Lang = "ruby"
 )
-
-// ParseLangs reads a comma-separated --lang value.
-func ParseLangs(s string) ([]Lang, error) {
-	var out []Lang
-	seen := map[Lang]bool{}
-	for _, part := range splitComma(s) {
-		l := Lang(part)
-		switch l {
-		case Go, Ruby:
-		default:
-			return nil, fmt.Errorf("unknown language %q; the languages are go and ruby", part)
-		}
-		if !seen[l] {
-			seen[l] = true
-			out = append(out, l)
-		}
-	}
-	if len(out) == 0 {
-		return nil, errors.New("at least one language is required, as --lang go, --lang ruby, or --lang go,ruby")
-	}
-	return out, nil
-}
-
-func splitComma(s string) []string {
-	var out []string
-	start := 0
-	for i := 0; i <= len(s); i++ {
-		if i == len(s) || s[i] == ',' {
-			if part := s[start:i]; part != "" {
-				out = append(out, part)
-			}
-			start = i + 1
-		}
-	}
-	return out
-}
 
 // Output is one generated file. Path is relative to the language's output
 // root, such as pbx/pbx.grpcmesh.go.

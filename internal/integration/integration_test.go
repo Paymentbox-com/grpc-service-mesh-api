@@ -26,7 +26,7 @@ func generate(t *testing.T) string {
 	}
 	out := t.TempDir()
 	var stdout, stderr bytes.Buffer
-	if code := cli.Run([]string{"--definitions", filepath.Join(repoRoot, "examples"), "--out", out, "--lang", "go,ruby"}, &stdout, &stderr); code != 0 {
+	if code := cli.Run([]string{"--definitions", filepath.Join(repoRoot, "examples"), "--go_out=" + filepath.Join(out, "go"), "--ruby_out=" + filepath.Join(out, "ruby")}, &stdout, &stderr); code != 0 {
 		t.Fatalf("generator exited %d:\n%s", code, stderr.String())
 	}
 	return out
@@ -53,7 +53,7 @@ func generateWithRoots(t *testing.T) string {
 	}
 	out := t.TempDir()
 	var stdout, stderr bytes.Buffer
-	args := []string{"--definitions", defs, "--out", out, "--lang", "go,ruby",
+	args := []string{"--definitions", defs, "--go_out=" + filepath.Join(out, "go"), "--ruby_out=" + filepath.Join(out, "ruby"),
 		"--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", "--ruby-root-module", "PmtboxMesh"}
 	if code := cli.Run(args, &stdout, &stderr); code != 0 {
 		t.Fatalf("generator exited %d:\n%s", code, stderr.String())

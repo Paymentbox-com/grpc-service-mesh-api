@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -22,8 +21,10 @@ const Usage = `grpc-service-mesh-gen generates the gRPC Service Mesh API code fo
 definitions project.
 
 Usage:
-  grpc-service-mesh-gen --definitions <dir> --out <dir> --lang go,ruby [-I <dir>] [--mesh-only] [--verbose]
+  grpc-service-mesh-gen --definitions <dir> [--go_out=<dir>] [--ruby_out=<dir>] [-I <dir>] [--mesh-only] [--verbose]
   grpc-service-mesh-gen proto-path
+
+At least one of --go_out and --ruby_out is given.
 
 Commands:
   proto-path
@@ -32,7 +33,7 @@ Commands:
       failure, print the error and exit 1. Plain protoc takes it as
         -I "$(grpc-service-mesh-gen proto-path)"
       A release build, one installed or run at a version such as
-      github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.4.0,
+      github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.5.0,
       takes the directory of that module version from the Go module cache
       with go mod download -json, downloading it when needed. A development
       build, whose version is (devel) or ends in +dirty, such as go run
@@ -45,15 +46,15 @@ Flags:
   --definitions <dir>
       The definitions directory. Required. Every *.proto under it is
       compiled, with paths relative to it. protoc runs three ways: the
-      message code of each requested language (Go with --go_out=<go out>
-      --go_opt=paths=source_relative, Ruby with --ruby_out=<ruby out>), one
+      message code of each requested language (Go with --go_out=<dir>
+      --go_opt=paths=source_relative, Ruby with --ruby_out=<dir>), one
       FileDescriptorSet of the whole directory with --include_imports
       --include_source_info, and this generator over that set. Every run's
       proto path is the definitions directory, then the specification
       directory that proto-path prints, then each -I directory. The message
       runs list the definitions files, leaving out any copy of
       mesh/options.proto and google/rpc/*.proto, and write what plain protoc
-      writes for them. With go in --lang, every definitions file sets
+      writes for them. With --go_out, every definitions file sets
       go_package. protoc and protoc-gen-go are found on PATH. A tree that
       declares no service is an error.
   -I <dir>, --proto_path <dir>, --proto_path=<dir>
@@ -65,34 +66,32 @@ Flags:
       nor any include directory holds mesh/options.proto, the generator
       stops before running protoc with an error saying why resolving
       failed.
-  --out <dir>
-      The output root. Generated code goes to <out>/go and <out>/ruby. Each
-      directory of the definitions that declares a service gets
-      <dir>/<name>.grpcmesh.go or <dir>/<name>_grpcmesh.rb in its generated
-      package, and the per-transport ServiceMaps go to
-      <out>/go/servicemaps/servicemaps.go and <out>/ruby/service_maps.rb.
-      Required unless every requested language has its own output root.
-  --go-out <dir>
-      The Go output root, in place of <out>/go. Needs go in --lang.
-  --ruby-out <dir>
-      The Ruby output root, in place of <out>/ruby. Needs ruby in --lang.
+  --go_out=<dir>, --go_out <dir>
+      Generate Go into <dir>, the directory protoc's --go_out takes. Each
+      definitions directory <path> that declares a service gets
+      <dir>/<path>/<name>.grpcmesh.go in its generated package, where
+      <name> is the last element of <path>, and the per-transport
+      ServiceMaps go to <dir>/servicemaps/servicemaps.go.
+  --ruby_out=<dir>, --ruby_out <dir>
+      Generate Ruby into <dir>, the directory protoc's --ruby_out takes. Each
+      definitions directory <path> that declares a service gets
+      <dir>/<path>/<name>_grpcmesh.rb, where <name> is the last element of
+      <path>, and the per-transport ServiceMaps go to <dir>/service_maps.rb.
   --go-root-package <import path[;name]>
-      Also write <go out>/<name>.grpcmesh.go, package <name>, aliasing every
-      generated Go identifier of the definitions tree: each message and enum
+      Also write <name>.grpcmesh.go in the --go_out directory, package
+      <name>, aliasing every generated Go identifier of the definitions tree: each message and enum
       type, each enum value, and each RPCService type, client, and targets
       value. <name> is the last element of the import path unless given after
       ";", as in go_package. Every aliased identifier must be unique across
       the tree, and no directory package may share the root package's name.
-      Needs go in --lang.
+      Needs --go_out.
   --ruby-root-module <Module>
-      Also write <ruby out>/<snake_case(Module)>_grpcmesh.rb, requiring every
-      generated Ruby file and defining module <Module> with a constant for
+      Also write <snake_case(Module)>_grpcmesh.rb in the --ruby_out
+      directory, requiring every generated Ruby file and defining module <Module> with a constant for
       every top-level message and enum, each RPCService, client, and targets
       constant, and ServiceMaps. Every aliased constant must be unique across
       the tree, and no generated module may share the root module's name.
-      Needs ruby in --lang.
-  --lang <list>
-      Comma-separated languages to generate, from go and ruby. Required.
+      Needs --ruby_out.
   --mesh-only
       Run only the FileDescriptorSet protoc run and write only the mesh
       code: the per-directory files, the ServiceMaps, and the root files.
@@ -122,12 +121,10 @@ func run(args []string, stdout, stderr io.Writer, spec func() (string, error)) i
 	fs.SetOutput(stderr)
 	fs.Usage = func() { say(stderr, "%s", Usage) }
 	definitions := fs.String("definitions", "", "")
-	out := fs.String("out", "", "")
-	goOut := fs.String("go-out", "", "")
-	rubyOut := fs.String("ruby-out", "", "")
+	goOut := fs.String("go_out", "", "")
+	rubyOut := fs.String("ruby_out", "", "")
 	goRoot := fs.String("go-root-package", "", "")
 	rubyRoot := fs.String("ruby-root-module", "", "")
-	lang := fs.String("lang", "", "")
 	var include includes
 	fs.Var(&include, "I", "")
 	fs.Var(&include, "proto_path", "")
@@ -149,39 +146,24 @@ func run(args []string, stdout, stderr io.Writer, spec func() (string, error)) i
 	if *definitions == "" {
 		return usage("--definitions is required")
 	}
-	langs, err := gen.ParseLangs(*lang)
-	if err != nil {
-		return usage(err.Error())
-	}
-	has := map[gen.Lang]bool{}
-	for _, l := range langs {
-		has[l] = true
-	}
-	for _, f := range []struct {
-		name, value string
-		lang        gen.Lang
-	}{
-		{"--go-out", *goOut, gen.Go}, {"--go-root-package", *goRoot, gen.Go},
-		{"--ruby-out", *rubyOut, gen.Ruby}, {"--ruby-root-module", *rubyRoot, gen.Ruby},
-	} {
-		if f.value != "" && !has[f.lang] {
-			return usage(fmt.Sprintf("%s applies to %s, which is not in --lang", f.name, f.lang))
-		}
-	}
 	roots := map[gen.Lang]string{}
-	for _, l := range langs {
-		own := *goOut
-		if l == gen.Ruby {
-			own = *rubyOut
-		}
-		switch {
-		case own != "":
-			roots[l] = own
-		case *out != "":
-			roots[l] = filepath.Join(*out, string(l))
-		default:
-			return usage(fmt.Sprintf("--out is required unless --%s-out is given", l))
-		}
+	var langs []gen.Lang
+	if *goOut != "" {
+		roots[gen.Go] = *goOut
+		langs = append(langs, gen.Go)
+	}
+	if *rubyOut != "" {
+		roots[gen.Ruby] = *rubyOut
+		langs = append(langs, gen.Ruby)
+	}
+	if len(langs) == 0 {
+		return usage("pass at least one of --go_out=<dir> and --ruby_out=<dir>")
+	}
+	if *goRoot != "" && *goOut == "" {
+		return usage("--go-root-package applies to Go, which needs --go_out")
+	}
+	if *rubyRoot != "" && *rubyOut == "" {
+		return usage("--ruby-root-module applies to Ruby, which needs --ruby_out")
 	}
 	if *goRoot != "" {
 		if _, _, err := gen.ParseGoRootPackage(*goRoot); err != nil {

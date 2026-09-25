@@ -6,34 +6,6 @@ import (
 	"testing"
 )
 
-func TestParseLangs_Both(t *testing.T) {
-	got, err := ParseLangs("go,ruby")
-	if err != nil || len(got) != 2 || got[0] != Go || got[1] != Ruby {
-		t.Fatalf("got %v, %v", got, err)
-	}
-}
-
-func TestParseLangs_RepeatedLanguageCountsOnce(t *testing.T) {
-	got, err := ParseLangs("ruby,ruby")
-	if err != nil || len(got) != 1 || got[0] != Ruby {
-		t.Fatalf("got %v, %v", got, err)
-	}
-}
-
-func TestParseLangs_Unknown(t *testing.T) {
-	_, err := ParseLangs("go,java")
-	if err == nil || err.Error() != `unknown language "java"; the languages are go and ruby` {
-		t.Fatalf("err %v", err)
-	}
-}
-
-func TestParseLangs_Empty(t *testing.T) {
-	_, err := ParseLangs(",")
-	if err == nil || err.Error() != "at least one language is required, as --lang go, --lang ruby, or --lang go,ruby" {
-		t.Fatalf("err %v", err)
-	}
-}
-
 func TestRender_OneFilePerDirectoryPlusServiceMapsPerLanguage(t *testing.T) {
 	m := analyze(t, map[string]string{
 		"pbx/deployment.proto": pbxDeployment,
