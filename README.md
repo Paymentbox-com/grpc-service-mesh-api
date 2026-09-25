@@ -459,7 +459,7 @@ The library imports `github.com/Paymentbox-com/service-mesh-go/mesh`, `google.go
 adds; the NATS transport is `github.com/Paymentbox-com/service-mesh-nats-go`, package `nats`:
 
 ```sh
-go get github.com/Paymentbox-com/service-mesh-nats-go@v0.5.0
+go get github.com/Paymentbox-com/service-mesh-nats-go@v0.6.0
 ```
 
 ### Ruby
