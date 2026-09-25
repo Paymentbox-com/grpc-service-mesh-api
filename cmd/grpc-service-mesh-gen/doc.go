@@ -6,16 +6,25 @@
 //
 // Usage:
 //
-//	grpc-service-mesh-gen --definitions <dir> -I <dir> --out <dir> --lang go,ruby [--verbose]
-//	grpc-service-mesh-gen --definitions <dir> -I <dir> --go-out <dir> --ruby-out <dir> --lang go,ruby
-//	grpc-service-mesh-gen --definitions <dir> -I <dir> --out <dir> --lang go,ruby \
+//	grpc-service-mesh-gen --definitions <dir> --out <dir> --lang go,ruby [-I <dir>] [--mesh-only] [--verbose]
+//	grpc-service-mesh-gen --definitions <dir> --go-out <dir> --ruby-out <dir> --lang go,ruby
+//	grpc-service-mesh-gen --definitions <dir> --out <dir> --lang go,ruby \
 //	    --go-root-package <import path[;name]> --ruby-root-module <Module>
+//	grpc-service-mesh-gen proto-path
 //
 // For example:
 //
-//	grpc-service-mesh-gen --definitions definitions \
-//	    -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto" \
-//	    --out lib --lang go,ruby
+//	grpc-service-mesh-gen --definitions definitions --out lib --lang go,ruby
+//
+// proto-path prints the specification directory, the directory holding
+// mesh/options.proto at this generator's version, and exits 0, or prints the
+// error and exits 1. A release build, installed or run at a version such as
+// @v0.4.0, takes the directory of that version of
+// github.com/Paymentbox-com/grpc-service-mesh-api from the Go module cache
+// with go mod download -json. A development build, whose version is (devel)
+// or ends in +dirty, takes the root of the working directory's module from
+// go list -m when that module is github.com/Paymentbox-com/grpc-service-mesh-api,
+// and fails otherwise. go is found on PATH.
 //
 // --definitions <dir> names the definitions directory and is required.
 // Every *.proto under it is compiled, with paths relative to it. protoc runs
@@ -23,24 +32,24 @@
 // --go_out=<go out> --go_opt=paths=source_relative, Ruby with
 // --ruby_out=<ruby out>), one FileDescriptorSet of the whole directory with
 // --include_imports --include_source_info, and this generator over that set.
-// The definitions directory is the first --proto_path of every run. The
-// message runs list the definitions files, leaving out any copy of
-// mesh/options.proto and google/rpc/*.proto, and write what plain protoc
-// writes for them. With go in --lang, every definitions file sets go_package.
-// protoc and protoc-gen-go are found on PATH. A tree that declares no service
-// is an error.
+// Every run's proto path is the definitions directory, then the
+// specification directory, then each -I directory. The message runs list the
+// definitions files, leaving out any copy of mesh/options.proto and
+// google/rpc/*.proto, and write what plain protoc writes for them. With go in
+// --lang, every definitions file sets go_package. protoc and protoc-gen-go
+// are found on PATH. A tree that declares no service is an error.
 //
 // -I <dir>, also spelled --proto_path <dir> or --proto_path=<dir>, adds an
-// include directory to every protoc run after the definitions directory, in
-// the order given, and repeats. The generator and plain protoc read the same
-// include paths. The library a project depends on supplies the
-// specification's protos, mesh/options.proto and google/rpc/*.proto, under
-// its proto/ directory at the version its compiled options were built from:
-// "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto"
-// for grpc-service-mesh-go and "$(bundle info --path grpc_service_mesh)/proto"
-// for the grpc_service_mesh gem. When neither the definitions directory nor
-// any include directory holds mesh/options.proto, the generator stops with an
-// error naming both before running protoc.
+// include directory to every protoc run after the specification directory,
+// in the order given, and repeats. A project whose files import
+// google/rpc/*.proto passes a checkout of github.com/googleapis/googleapis.
+// When the specification directory cannot be resolved and neither the
+// definitions directory nor any include directory holds mesh/options.proto,
+// the generator stops before running protoc with an error saying why
+// resolving failed.
+//
+// --mesh-only runs only the FileDescriptorSet protoc run and writes only the
+// mesh code: the per-directory files, the ServiceMaps, and the root files.
 //
 // --out <dir> is the output root; generated code goes to <out>/go and
 // <out>/ruby. It is required unless every requested language has its own

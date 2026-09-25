@@ -1,5 +1,6 @@
 // Package integration compiles and loads the generator's output for
-// examples/pbx against the published libraries. The tests need network
+// examples/pbx against the published libraries, and resolves the
+// specification directory of a published version. The tests need network
 // access, protoc, protoc-gen-go, go, and bundle, so they run only with
 // GRPC_SERVICE_MESH_GEN_INTEGRATION set.
 package integration
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/Paymentbox-com/grpc-service-mesh-api/internal/cli"
+	"github.com/Paymentbox-com/grpc-service-mesh-api/internal/specdir"
 )
 
 var repoRoot = filepath.Join("..", "..")
@@ -24,7 +26,7 @@ func generate(t *testing.T) string {
 	}
 	out := t.TempDir()
 	var stdout, stderr bytes.Buffer
-	if code := cli.Run([]string{"--definitions", filepath.Join(repoRoot, "examples"), "-I", repoRoot, "--out", out, "--lang", "go,ruby"}, &stdout, &stderr); code != 0 {
+	if code := cli.Run([]string{"--definitions", filepath.Join(repoRoot, "examples"), "--out", out, "--lang", "go,ruby"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("generator exited %d:\n%s", code, stderr.String())
 	}
 	return out
@@ -51,7 +53,7 @@ func generateWithRoots(t *testing.T) string {
 	}
 	out := t.TempDir()
 	var stdout, stderr bytes.Buffer
-	args := []string{"--definitions", defs, "-I", repoRoot, "--out", out, "--lang", "go,ruby",
+	args := []string{"--definitions", defs, "--out", out, "--lang", "go,ruby",
 		"--go-root-package", "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", "--ruby-root-module", "PmtboxMesh"}
 	if code := cli.Run(args, &stdout, &stderr); code != 0 {
 		t.Fatalf("generator exited %d:\n%s", code, stderr.String())
@@ -199,5 +201,31 @@ puts "loaded"
 	got := sh(t, ruby, "bundle", "exec", "ruby", "-W", "-I"+ruby, "-e", script)
 	if strings.TrimSpace(got) != "loaded" {
 		t.Fatalf("ruby output:\n%s", got)
+	}
+}
+
+func TestForVersion_ReleaseTakesTheModuleCache(t *testing.T) {
+	if os.Getenv("GRPC_SERVICE_MESH_GEN_INTEGRATION") == "" {
+		t.Skip("set GRPC_SERVICE_MESH_GEN_INTEGRATION=1 to run")
+	}
+	dir, err := specdir.ForVersion("v0.3.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(filepath.ToSlash(dir), "/github.com/!paymentbox-com/grpc-service-mesh-api@v0.3.0") {
+		t.Fatalf("dir %s", dir)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "mesh", "options.proto")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestForVersion_UnknownReleaseIsAnError(t *testing.T) {
+	if os.Getenv("GRPC_SERVICE_MESH_GEN_INTEGRATION") == "" {
+		t.Skip("set GRPC_SERVICE_MESH_GEN_INTEGRATION=1 to run")
+	}
+	_, err := specdir.ForVersion("v0.0.99")
+	if err == nil || !strings.HasPrefix(err.Error(), "go mod download github.com/Paymentbox-com/grpc-service-mesh-api@v0.0.99: ") {
+		t.Fatalf("err %v", err)
 	}
 }

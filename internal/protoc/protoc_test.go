@@ -46,7 +46,7 @@ func TestCheckOptions_IncludeEntryMayBeAPathList(t *testing.T) {
 	}
 }
 
-func TestMessageFiles_SkipsCopiesOfTheSpecificationFiles(t *testing.T) {
+func TestMessageFiles_SkipsCopiesOfThePublishedFiles(t *testing.T) {
 	got := MessageFiles([]string{
 		"google/rpc/code.proto", "google/rpc/error_details.proto", "google/rpc/status.proto",
 		"mesh/options.proto", "pbx/api_key.proto",

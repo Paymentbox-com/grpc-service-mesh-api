@@ -10,8 +10,8 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
-// repoRoot is the checkout, whose mesh/ and google/ directories are on the
-// proto path of every fixture.
+// repoRoot is the checkout, whose mesh/ directory is on the proto path of
+// every fixture.
 var repoRoot = filepath.Join("..", "..")
 
 // compile writes the fixture files into a temporary definitions directory and

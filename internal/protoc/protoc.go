@@ -20,9 +20,10 @@ import (
 // definitions file that sets a mesh option.
 const OptionsProto = "mesh/options.proto"
 
-// SpecificationFiles lists the specification's own proto files at their
-// import paths.
-var SpecificationFiles = []string{
+// PublishedFiles lists the proto files whose compiled forms are published
+// packages: mesh/options.proto in the language libraries, and google/rpc in
+// google.golang.org/genproto and the googleapis-common-protos-types gem.
+var PublishedFiles = []string{
 	OptionsProto,
 	"google/rpc/code.proto",
 	"google/rpc/status.proto",
@@ -30,7 +31,7 @@ var SpecificationFiles = []string{
 }
 
 // ErrOptionsNotFound reports that no include path holds mesh/options.proto.
-var ErrOptionsNotFound = errors.New(OptionsProto + ` was not found on any -I path; pass -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto" or -I "$(bundle info --path grpc_service_mesh)/proto"`)
+var ErrOptionsNotFound = errors.New(OptionsProto + " was not found on any -I path")
 
 // Runner invokes protoc with the definitions directory and then each
 // include directory on its proto path.
@@ -84,13 +85,11 @@ func FindProtos(definitions string) ([]string, error) {
 	return out, nil
 }
 
-// MessageFiles returns files without copies of the specification's own
-// files. Their compiled forms ship with the language libraries and the
-// standard google/rpc packages.
+// MessageFiles returns files without copies of PublishedFiles.
 func MessageFiles(files []string) []string {
 	var out []string
 	for _, f := range files {
-		if !slices.Contains(SpecificationFiles, f) {
+		if !slices.Contains(PublishedFiles, f) {
 			out = append(out, f)
 		}
 	}

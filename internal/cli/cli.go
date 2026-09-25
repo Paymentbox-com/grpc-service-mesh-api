@@ -14,6 +14,7 @@ import (
 
 	"github.com/Paymentbox-com/grpc-service-mesh-api/internal/gen"
 	"github.com/Paymentbox-com/grpc-service-mesh-api/internal/protoc"
+	"github.com/Paymentbox-com/grpc-service-mesh-api/internal/specdir"
 )
 
 // Usage is the --help text.
@@ -21,7 +22,24 @@ const Usage = `grpc-service-mesh-gen generates the gRPC Service Mesh API code fo
 definitions project.
 
 Usage:
-  grpc-service-mesh-gen --definitions <dir> -I <dir> --out <dir> --lang go,ruby [--verbose]
+  grpc-service-mesh-gen --definitions <dir> --out <dir> --lang go,ruby [-I <dir>] [--mesh-only] [--verbose]
+  grpc-service-mesh-gen proto-path
+
+Commands:
+  proto-path
+      Print the specification directory, the directory holding
+      mesh/options.proto at this generator's version, and exit 0. On
+      failure, print the error and exit 1. Plain protoc takes it as
+        -I "$(grpc-service-mesh-gen proto-path)"
+      A release build, one installed or run at a version such as
+      github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.4.0,
+      takes the directory of that module version from the Go module cache
+      with go mod download -json, downloading it when needed. A development
+      build, whose version is (devel) or ends in +dirty, such as go run
+      ./cmd/grpc-service-mesh-gen in a checkout, takes the root of the
+      working directory's module from go list -m when that module is
+      github.com/Paymentbox-com/grpc-service-mesh-api, and fails otherwise.
+      go is found on PATH.
 
 Flags:
   --definitions <dir>
@@ -30,25 +48,23 @@ Flags:
       message code of each requested language (Go with --go_out=<go out>
       --go_opt=paths=source_relative, Ruby with --ruby_out=<ruby out>), one
       FileDescriptorSet of the whole directory with --include_imports
-      --include_source_info, and this generator over that set. The
-      definitions directory is the first --proto_path of every run. The
-      message runs list the definitions files, leaving out any copy of
+      --include_source_info, and this generator over that set. Every run's
+      proto path is the definitions directory, then the specification
+      directory that proto-path prints, then each -I directory. The message
+      runs list the definitions files, leaving out any copy of
       mesh/options.proto and google/rpc/*.proto, and write what plain protoc
       writes for them. With go in --lang, every definitions file sets
       go_package. protoc and protoc-gen-go are found on PATH. A tree that
       declares no service is an error.
   -I <dir>, --proto_path <dir>, --proto_path=<dir>
-      An include directory, passed to every protoc run after the definitions
-      directory, in the order given. Repeatable. The generator and plain
-      protoc read the same include paths. The library a project depends on
-      supplies the specification's protos, mesh/options.proto and
-      google/rpc/*.proto, under its proto/ directory at the version its
-      compiled options were built from:
-        -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto"
-        -I "$(bundle info --path grpc_service_mesh)/proto"
-      When neither the definitions directory nor any include directory
-      holds mesh/options.proto, the generator stops with an error before
-      running protoc.
+      An include directory, passed to every protoc run after the
+      specification directory, in the order given. Repeatable. A project
+      whose files import google/rpc/*.proto passes a checkout of
+      github.com/googleapis/googleapis here. When the specification
+      directory cannot be resolved and neither the definitions directory
+      nor any include directory holds mesh/options.proto, the generator
+      stops before running protoc with an error saying why resolving
+      failed.
   --out <dir>
       The output root. Generated code goes to <out>/go and <out>/ruby. Each
       directory of the definitions that declares a service gets
@@ -77,6 +93,11 @@ Flags:
       Needs ruby in --lang.
   --lang <list>
       Comma-separated languages to generate, from go and ruby. Required.
+  --mesh-only
+      Run only the FileDescriptorSet protoc run and write only the mesh
+      code: the per-directory files, the ServiceMaps, and the root files.
+      For a project that compiles its message code with its own protoc
+      command.
   --verbose
       Print each protoc command line and each file written.
   --help
@@ -89,6 +110,14 @@ error otherwise, and 2 for a usage error.
 // Run executes the command with args (without the program name) and returns
 // the exit status.
 func Run(args []string, stdout, stderr io.Writer) int {
+	return run(args, stdout, stderr, specdir.Resolve)
+}
+
+// run is Run with the specification directory resolved by spec.
+func run(args []string, stdout, stderr io.Writer, spec func() (string, error)) int {
+	if len(args) > 0 && args[0] == "proto-path" {
+		return protoPath(args[1:], stdout, stderr, spec)
+	}
 	fs := flag.NewFlagSet("grpc-service-mesh-gen", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() { say(stderr, "%s", Usage) }
@@ -102,6 +131,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	var include includes
 	fs.Var(&include, "I", "")
 	fs.Var(&include, "proto_path", "")
+	meshOnly := fs.Bool("mesh-only", false, "")
 	verbose := fs.Bool("verbose", false, "")
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -165,12 +195,18 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	opts := gen.Options{Langs: langs, GoRootPackage: *goRoot, RubyRootModule: *rubyRoot}
 
+	r := &protoc.Runner{Definitions: *definitions, Include: include}
+	dir, specErr := spec()
+	if specErr == nil {
+		r.Include = append([]string{dir}, include...)
+	}
+
 	var log io.Writer
 	if *verbose {
 		log = stdout
 	}
-	r := &protoc.Runner{Definitions: *definitions, Include: include, Verbose: log}
-	written, err := generate(r, roots, opts)
+	r.Verbose = log
+	written, err := generate(r, roots, opts, *meshOnly, specErr)
 	if err != nil {
 		say(stderr, "grpc-service-mesh-gen: %s\n", err)
 		return 1
@@ -180,6 +216,21 @@ func Run(args []string, stdout, stderr io.Writer) int {
 			say(log, "wrote %s\n", p)
 		}
 	}
+	return 0
+}
+
+// protoPath prints the specification directory.
+func protoPath(args []string, stdout, stderr io.Writer, spec func() (string, error)) int {
+	if len(args) > 0 {
+		say(stderr, "grpc-service-mesh-gen: proto-path takes no arguments (see --help)\n")
+		return 2
+	}
+	dir, err := spec()
+	if err != nil {
+		say(stderr, "grpc-service-mesh-gen: %s\n", err)
+		return 1
+	}
+	say(stdout, "%s\n", dir)
 	return 0
 }
 
@@ -199,13 +250,18 @@ func say(w io.Writer, format string, args ...any) {
 }
 
 // generate checks the include paths, then runs the descriptor-set protoc run,
-// the mesh generator, and the message runs, and writes the generated files.
-func generate(r *protoc.Runner, roots map[gen.Lang]string, opts gen.Options) ([]string, error) {
+// the mesh generator, and, unless meshOnly, the message runs, and writes the
+// generated files. specErr is why the specification directory is not on the
+// include path, when it is not.
+func generate(r *protoc.Runner, roots map[gen.Lang]string, opts gen.Options, meshOnly bool, specErr error) ([]string, error) {
 	files, err := protoc.FindProtos(r.Definitions)
 	if err != nil {
 		return nil, err
 	}
 	if err := r.CheckOptions(); err != nil {
+		if specErr != nil {
+			return nil, fmt.Errorf("%w, and the specification directory could not be resolved: %v", err, specErr)
+		}
 		return nil, err
 	}
 	set, err := descriptorSet(r, files)
@@ -223,15 +279,17 @@ func generate(r *protoc.Runner, roots map[gen.Lang]string, opts gen.Options) ([]
 	if err != nil {
 		return nil, err
 	}
-	for _, l := range opts.Langs {
-		switch l {
-		case gen.Go:
-			err = r.GoMessages(roots[l], files)
-		case gen.Ruby:
-			err = r.RubyMessages(roots[l], files)
-		}
-		if err != nil {
-			return nil, err
+	if !meshOnly {
+		for _, l := range opts.Langs {
+			switch l {
+			case gen.Go:
+				err = r.GoMessages(roots[l], files)
+			case gen.Ruby:
+				err = r.RubyMessages(roots[l], files)
+			}
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return gen.Write(roots, outs)
