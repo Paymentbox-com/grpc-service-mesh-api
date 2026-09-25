@@ -103,21 +103,21 @@ service ApiKeyService {
 
 `mesh/options.proto` belongs to this specification and lives in this repository. A definitions project imports it by
 that path and never copies it. Its `go_package` is `github.com/Paymentbox-com/grpc-service-mesh-go/meshoptions`, and its
-compiled forms ship with each language library: package `meshoptions` in
-[grpc-service-mesh-go](https://github.com/Paymentbox-com/grpc-service-mesh-go) and `mesh/options_pb.rb` in the
-`grpc_service_mesh` gem. Each library also ships the `.proto` itself under a top-level `proto/` directory, which a
-`protoc` run puts on its import path with `-I`. The `google/rpc/*.proto` files ship the same way: their `.proto`
-sources are in this repository and under each library's `proto/`, and their compiled forms are the published ones,
-`google.golang.org/genproto/googleapis/rpc` in Go and the `googleapis-common-protos-types` gem in Ruby. The generator
-carries embedded copies of all four files and adds them to `--proto_path`, after the definitions directory, every time
-it runs `protoc`. An editor that resolves protobuf imports on its own is given a library's `proto/` directory or a
-checkout of this repository as an import path.
+compiled forms ship with each language-specific implementation of this specification. Each library also ships the
+`.proto` itself under a top-level `proto/` directory, which a `protoc` run puts on its import path with `-I`. The
+`google/rpc/*.proto` files ship the same way: their `.proto` sources are in this repository and under each library's
+`proto/`, and their compiled forms are the published ones, `google.golang.org/genproto/googleapis/rpc` in Go and the
+`googleapis-common-protos-types` gem in Ruby. The library a project depends on supplies all four `.proto` files at the
+version its compiled options were built from, and the generator and plain `protoc` both read them from the `-I`
+directories they are given. An editor that resolves protobuf imports on its own is given a library's `proto/`
+directory or a checkout of this repository as an import path.
 
 ### Messages
 
-The standard `protoc` compilers produce message type definitions for each message type defined in the `.proto` files 
+The standard `protoc` compilers produce message types for each message type defined in the `.proto` files 
 they are aimed at. These generated types normally implement their own binary serialization, and are wrapped by a 
-protocol layer type that packages that binary serialization up as the `Payload` of a Service Mesh API Message type.
+protocol layer type that packages that binary serialization up as the `Payload` of a Service Mesh API Message type, 
+and provides conversion to and from the generated type and the Service Mesh Message type.
 
 The `Message` metadata carries `Content-Type: application/x-protobuf`. A topic method's declared return type,
 conventionally `google.protobuf.Empty`, is never sent.
@@ -169,30 +169,47 @@ definitions/
 The generator is the Go program `grpc-service-mesh-gen` in this repository:
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.2.0
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.3.0
 ```
 
-or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.2.0`
+or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.3.0`
 with the same flags. `grpc-service-mesh-gen --help` describes every flag.
 
 One command generates everything for a definitions project:
 
 ```sh
-grpc-service-mesh-gen --definitions definitions --out lib --lang go,ruby
+grpc-service-mesh-gen --definitions definitions -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto" --out lib --lang go,ruby
 ```
 
-It runs `protoc` for the message code of each requested language (Go with `paths=source_relative` into `lib/go`, 
-Ruby into `lib/ruby`), a `protoc` run that writes one `FileDescriptorSet` for the whole `definitions` directory with 
-`--include_imports --include_source_info`, and the mesh generator over that set. Every run has `definitions` on its 
-first `--proto_path` and the generator's embedded copies of `mesh/options.proto` and `google/rpc/*.proto` on its second, 
-and lists only the files under `definitions`. The message code it writes is what plain `protoc` writes for those files, 
-as described under Compiling with plain protoc. `protoc` and `protoc-gen-go` are found on `PATH`.
+It runs `protoc` for the message code of each requested language (Go with `paths=source_relative` into `lib/go`,
+Ruby into `lib/ruby`), a `protoc` run that writes one `FileDescriptorSet` for the whole `definitions` directory with
+`--include_imports --include_source_info`, and the mesh generator over that set. Every run has `definitions` on its
+first `--proto_path`, then each `-I` directory in the order given, and lists only the files under `definitions`. The
+message code it writes is what plain `protoc` writes for those files, as described under Compiling with plain protoc.
+`protoc` and `protoc-gen-go` are found on `PATH`.
+
+`-I <dir>` is repeatable and is also spelled `--proto_path <dir>` or `--proto_path=<dir>`, as `protoc` spells it. The
+generator and plain `protoc` read the same include paths. The library a project depends on supplies the
+specification's protos, `mesh/options.proto` and `google/rpc/*.proto`, under its `proto/` directory at the version its
+compiled options were built from, so the `-I` directory is that library's `proto/`:
+`"$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto"` for
+[grpc-service-mesh-go](https://github.com/Paymentbox-com/grpc-service-mesh-go), run in the directory of a `go.mod`
+that requires it, or `"$(bundle info --path grpc_service_mesh)/proto"` for the `grpc_service_mesh` gem, run beside the project's
+`Gemfile`. When neither `definitions` nor any `-I` directory holds `mesh/options.proto`, the generator stops before
+running `protoc` with this error:
+
+```
+mesh/options.proto was not found on any -I path; pass -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto" or -I "$(bundle info --path grpc_service_mesh)/proto"
+```
+
+Every other `protoc` error is reported as `protoc` writes it.
 
 `--go-out <dir>` and `--ruby-out <dir>` place one language's output at that directory in place of `<out>/go` or 
 `<out>/ruby`; `--out` stays the default for both. Each applies only to a language named in `--lang`:
 
 ```sh
-grpc-service-mesh-gen --definitions definitions --go-out go/gen --ruby-out ruby/lib --lang go,ruby
+grpc-service-mesh-gen --definitions definitions -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto" \
+    --go-out go/gen --ruby-out ruby/lib --lang go,ruby
 ```
 
 The compiled forms of this specification's own files come from the language libraries and the published google/rpc 
@@ -252,8 +269,8 @@ protoc -I definitions -I grpc-service-mesh-api \
   --python_out=lib/python $(find definitions -name '*.proto') mesh/options.proto
 ```
 
-The generator's message runs are the Go and Ruby commands above with its embedded copies of the specification's files 
-as the second `-I`, and write the same files.
+The generator's message runs are the Go and Ruby commands above. Given the same `-I` directories, they write the same
+files.
 
 ### Root package
 
@@ -265,7 +282,7 @@ types and services belong to, and a root alias is the same type or value under a
 wire is the directory package's message.
 
 ```sh
-grpc-service-mesh-gen --definitions definitions --out lib --lang go,ruby \
+grpc-service-mesh-gen --definitions definitions -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto" --out lib --lang go,ruby \
     --go-root-package "github.com/Paymentbox-com/pmtbox-mesh;pmtboxmesh" --ruby-root-module PmtboxMesh
 ```
 
@@ -481,10 +498,10 @@ transport of the application's choice. The versions below are the current tags.
 ### The generator
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.2.0
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.3.0
 ```
 
-or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.2.0` 
+or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.3.0` 
 with the same flags. The generator runs `protoc` and, when Go is requested, `protoc-gen-go`, both found on `PATH`:
 
 ```sh
@@ -542,7 +559,7 @@ Applications depend on it for their message types, services, clients, and target
 * the Go module and the Ruby library that the generated code lives in
 
 The project holds only `definitions/` and the output roots. `mesh/options.proto` and `google/rpc/*.proto` come from the
-generator and the language libraries, as described under Options.
+language libraries, as described under Options.
 
 ```
 definitions/
@@ -567,7 +584,7 @@ the directory an application puts on its load path, or the `lib/` of a gem.
 One command generates everything:
 
 ```sh
-grpc-service-mesh-gen --definitions definitions --out lib --lang go,ruby
+grpc-service-mesh-gen --definitions definitions -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto" --out lib --lang go,ruby
 ```
 
 It writes these files:
@@ -624,7 +641,7 @@ Gemfile                    # grpc_service_mesh, service_mesh, googleapis-common-
 ```
 
 ```sh
-grpc-service-mesh-gen --definitions definitions --ruby-out lib/proto --lang ruby
+grpc-service-mesh-gen --definitions definitions -I "$(bundle info --path grpc_service_mesh)/proto" --ruby-out lib/proto --lang ruby
 ```
 
 ```ruby

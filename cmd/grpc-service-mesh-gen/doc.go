@@ -6,10 +6,16 @@
 //
 // Usage:
 //
-//	grpc-service-mesh-gen --definitions <dir> --out <dir> --lang go,ruby [--verbose]
-//	grpc-service-mesh-gen --definitions <dir> --go-out <dir> --ruby-out <dir> --lang go,ruby
-//	grpc-service-mesh-gen --definitions <dir> --out <dir> --lang go,ruby \
+//	grpc-service-mesh-gen --definitions <dir> -I <dir> --out <dir> --lang go,ruby [--verbose]
+//	grpc-service-mesh-gen --definitions <dir> -I <dir> --go-out <dir> --ruby-out <dir> --lang go,ruby
+//	grpc-service-mesh-gen --definitions <dir> -I <dir> --out <dir> --lang go,ruby \
 //	    --go-root-package <import path[;name]> --ruby-root-module <Module>
+//
+// For example:
+//
+//	grpc-service-mesh-gen --definitions definitions \
+//	    -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto" \
+//	    --out lib --lang go,ruby
 //
 // --definitions <dir> names the definitions directory and is required.
 // Every *.proto under it is compiled, with paths relative to it. protoc runs
@@ -17,11 +23,24 @@
 // --go_out=<go out> --go_opt=paths=source_relative, Ruby with
 // --ruby_out=<ruby out>), one FileDescriptorSet of the whole directory with
 // --include_imports --include_source_info, and this generator over that set.
-// Embedded copies of mesh/options.proto and google/rpc/*.proto are the second
-// --proto_path. The message runs list the definitions files, leaving out any
-// copy of those four, and write what plain protoc writes for them. With go in
-// --lang, every definitions file sets go_package. protoc and protoc-gen-go are
-// found on PATH. A tree that declares no service is an error.
+// The definitions directory is the first --proto_path of every run. The
+// message runs list the definitions files, leaving out any copy of
+// mesh/options.proto and google/rpc/*.proto, and write what plain protoc
+// writes for them. With go in --lang, every definitions file sets go_package.
+// protoc and protoc-gen-go are found on PATH. A tree that declares no service
+// is an error.
+//
+// -I <dir>, also spelled --proto_path <dir> or --proto_path=<dir>, adds an
+// include directory to every protoc run after the definitions directory, in
+// the order given, and repeats. The generator and plain protoc read the same
+// include paths. The library a project depends on supplies the
+// specification's protos, mesh/options.proto and google/rpc/*.proto, under
+// its proto/ directory at the version its compiled options were built from:
+// "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto"
+// for grpc-service-mesh-go and "$(bundle info --path grpc_service_mesh)/proto"
+// for the grpc_service_mesh gem. When neither the definitions directory nor
+// any include directory holds mesh/options.proto, the generator stops with an
+// error naming both before running protoc.
 //
 // --out <dir> is the output root; generated code goes to <out>/go and
 // <out>/ruby. It is required unless every requested language has its own

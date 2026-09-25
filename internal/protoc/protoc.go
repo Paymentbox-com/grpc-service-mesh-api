@@ -4,6 +4,7 @@ package protoc
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -13,36 +14,46 @@ import (
 	"slices"
 	"sort"
 	"strings"
-
-	"github.com/Paymentbox-com/grpc-service-mesh-api"
 )
 
-// Runner invokes protoc with the definitions directory and the embedded
-// specification files on its proto path.
+// OptionsProto is the specification's options file, imported by every
+// definitions file that sets a mesh option.
+const OptionsProto = "mesh/options.proto"
+
+// SpecificationFiles lists the specification's own proto files at their
+// import paths.
+var SpecificationFiles = []string{
+	OptionsProto,
+	"google/rpc/code.proto",
+	"google/rpc/status.proto",
+	"google/rpc/error_details.proto",
+}
+
+// ErrOptionsNotFound reports that no include path holds mesh/options.proto.
+var ErrOptionsNotFound = errors.New(OptionsProto + ` was not found on any -I path; pass -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto" or -I "$(bundle info --path grpc_service_mesh)/proto"`)
+
+// Runner invokes protoc with the definitions directory and then each
+// include directory on its proto path.
 type Runner struct {
 	Definitions string    // the definitions directory
-	Embedded    string    // directory holding the embedded spec files
+	Include     []string  // further proto path entries, in order
 	Verbose     io.Writer // each command line is printed here when set
 }
 
-// WriteEmbedded writes the specification's proto files under dir, at their
-// import paths, and returns that directory.
-func WriteEmbedded(dir string) (string, error) {
-	root := filepath.Join(dir, "grpc-service-mesh-api")
-	for _, p := range spec.Paths {
-		b, err := fs.ReadFile(spec.Files, p)
-		if err != nil {
-			return "", err
-		}
-		dst := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return "", err
-		}
-		if err := os.WriteFile(dst, b, 0o644); err != nil {
-			return "", err
+// CheckOptions returns ErrOptionsNotFound unless the definitions directory
+// or an include directory holds mesh/options.proto. An include entry may be a
+// list joined with the OS path list separator, as protoc accepts.
+func (r *Runner) CheckOptions() error {
+	dirs := []string{r.Definitions}
+	for _, entry := range r.Include {
+		dirs = append(dirs, filepath.SplitList(entry)...)
+	}
+	for _, dir := range dirs {
+		if info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(OptionsProto))); err == nil && !info.IsDir() {
+			return nil
 		}
 	}
-	return root, nil
+	return ErrOptionsNotFound
 }
 
 // FindProtos lists every .proto under the definitions directory, as
@@ -74,12 +85,12 @@ func FindProtos(definitions string) ([]string, error) {
 }
 
 // MessageFiles returns files without copies of the specification's own
-// files. Those are only on the proto path; their compiled forms ship with the
-// language libraries and the standard google/rpc packages.
+// files. Their compiled forms ship with the language libraries and the
+// standard google/rpc packages.
 func MessageFiles(files []string) []string {
 	var out []string
 	for _, f := range files {
-		if !slices.Contains(spec.Paths, f) {
+		if !slices.Contains(SpecificationFiles, f) {
 			out = append(out, f)
 		}
 	}
@@ -87,10 +98,11 @@ func MessageFiles(files []string) []string {
 }
 
 func (r *Runner) run(args []string, files []string) error {
-	all := append([]string{
-		"--proto_path=" + r.Definitions,
-		"--proto_path=" + r.Embedded,
-	}, args...)
+	all := []string{"--proto_path=" + r.Definitions}
+	for _, dir := range r.Include {
+		all = append(all, "--proto_path="+dir)
+	}
+	all = append(all, args...)
 	all = append(all, files...)
 	if r.Verbose != nil {
 		_, _ = fmt.Fprintln(r.Verbose, "protoc", strings.Join(all, " "))

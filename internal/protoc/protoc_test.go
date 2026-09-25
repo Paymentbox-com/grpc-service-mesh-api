@@ -39,16 +39,10 @@ func TestFindProtos_NoneIsAnError(t *testing.T) {
 	}
 }
 
-func TestWriteEmbedded_WritesEveryFileAtItsImportPath(t *testing.T) {
-	root, err := WriteEmbedded(t.TempDir())
-	if err != nil {
+func TestCheckOptions_IncludeEntryMayBeAPathList(t *testing.T) {
+	r := &Runner{Definitions: t.TempDir(), Include: []string{t.TempDir() + string(os.PathListSeparator) + filepath.Join("..", "..")}}
+	if err := r.CheckOptions(); err != nil {
 		t.Fatal(err)
-	}
-	for _, p := range []string{"mesh/options.proto", "google/rpc/code.proto", "google/rpc/status.proto", "google/rpc/error_details.proto"} {
-		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(p)))
-		if err != nil || len(b) == 0 {
-			t.Fatalf("%s: %v", p, err)
-		}
 	}
 }
 

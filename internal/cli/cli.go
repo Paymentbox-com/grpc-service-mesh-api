@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"google.golang.org/protobuf/types/descriptorpb"
 
@@ -20,7 +21,7 @@ const Usage = `grpc-service-mesh-gen generates the gRPC Service Mesh API code fo
 definitions project.
 
 Usage:
-  grpc-service-mesh-gen --definitions <dir> --out <dir> --lang go,ruby [--verbose]
+  grpc-service-mesh-gen --definitions <dir> -I <dir> --out <dir> --lang go,ruby [--verbose]
 
 Flags:
   --definitions <dir>
@@ -29,13 +30,25 @@ Flags:
       message code of each requested language (Go with --go_out=<go out>
       --go_opt=paths=source_relative, Ruby with --ruby_out=<ruby out>), one
       FileDescriptorSet of the whole directory with --include_imports
-      --include_source_info, and this generator over that set. Embedded
-      copies of mesh/options.proto and google/rpc/*.proto are the second
-      --proto_path. The message runs list the definitions files, leaving out
-      any copy of those four, and write what plain protoc writes for them.
-      With go in --lang, every definitions file sets go_package. protoc and
-      protoc-gen-go are found on PATH. A tree that declares no service is an
-      error.
+      --include_source_info, and this generator over that set. The
+      definitions directory is the first --proto_path of every run. The
+      message runs list the definitions files, leaving out any copy of
+      mesh/options.proto and google/rpc/*.proto, and write what plain protoc
+      writes for them. With go in --lang, every definitions file sets
+      go_package. protoc and protoc-gen-go are found on PATH. A tree that
+      declares no service is an error.
+  -I <dir>, --proto_path <dir>, --proto_path=<dir>
+      An include directory, passed to every protoc run after the definitions
+      directory, in the order given. Repeatable. The generator and plain
+      protoc read the same include paths. The library a project depends on
+      supplies the specification's protos, mesh/options.proto and
+      google/rpc/*.proto, under its proto/ directory at the version its
+      compiled options were built from:
+        -I "$(go list -m -f '{{.Dir}}' github.com/Paymentbox-com/grpc-service-mesh-go)/proto"
+        -I "$(bundle info --path grpc_service_mesh)/proto"
+      When neither the definitions directory nor any include directory
+      holds mesh/options.proto, the generator stops with an error before
+      running protoc.
   --out <dir>
       The output root. Generated code goes to <out>/go and <out>/ruby. Each
       directory of the definitions that declares a service gets
@@ -86,6 +99,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	goRoot := fs.String("go-root-package", "", "")
 	rubyRoot := fs.String("ruby-root-module", "", "")
 	lang := fs.String("lang", "", "")
+	var include includes
+	fs.Var(&include, "I", "")
+	fs.Var(&include, "proto_path", "")
 	verbose := fs.Bool("verbose", false, "")
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -153,7 +169,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if *verbose {
 		log = stdout
 	}
-	written, err := generate(*definitions, roots, opts, log)
+	r := &protoc.Runner{Definitions: *definitions, Include: include, Verbose: log}
+	written, err := generate(r, roots, opts)
 	if err != nil {
 		say(stderr, "grpc-service-mesh-gen: %s\n", err)
 		return 1
@@ -166,39 +183,37 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// includes collects -I and --proto_path values in the order given.
+type includes []string
+
+func (i *includes) String() string { return strings.Join(*i, " ") }
+
+func (i *includes) Set(dir string) error {
+	*i = append(*i, dir)
+	return nil
+}
+
 // say writes to a terminal stream, whose write errors have nowhere to go.
 func say(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
 }
 
-// generate runs the descriptor-set protoc run, the mesh generator, and the
-// message runs, then writes the generated files.
-func generate(definitions string, roots map[gen.Lang]string, opts gen.Options, log io.Writer) ([]string, error) {
-	files, err := protoc.FindProtos(definitions)
+// generate checks the include paths, then runs the descriptor-set protoc run,
+// the mesh generator, and the message runs, and writes the generated files.
+func generate(r *protoc.Runner, roots map[gen.Lang]string, opts gen.Options) ([]string, error) {
+	files, err := protoc.FindProtos(r.Definitions)
 	if err != nil {
 		return nil, err
 	}
-	tmp, err := os.MkdirTemp("", "grpc-service-mesh-gen-")
-	if err != nil {
+	if err := r.CheckOptions(); err != nil {
 		return nil, err
 	}
-	defer func() { _ = os.RemoveAll(tmp) }()
-	embedded, err := protoc.WriteEmbedded(tmp)
-	if err != nil {
-		return nil, err
-	}
-	r := &protoc.Runner{Definitions: definitions, Embedded: embedded, Verbose: log}
-
-	setFile := filepath.Join(tmp, "definitions.pb")
-	if err := r.DescriptorSet(setFile, files); err != nil {
-		return nil, err
-	}
-	set, err := gen.ReadSet(setFile)
+	set, err := descriptorSet(r, files)
 	if err != nil {
 		return nil, err
 	}
 	if !slices.ContainsFunc(set.GetFile(), func(f *descriptorpb.FileDescriptorProto) bool { return len(f.GetService()) > 0 }) {
-		return nil, fmt.Errorf("no service declared under %s", definitions)
+		return nil, fmt.Errorf("no service declared under %s", r.Definitions)
 	}
 	model, err := gen.Analyze(set)
 	if err != nil {
@@ -220,4 +235,22 @@ func generate(definitions string, roots map[gen.Lang]string, opts gen.Options, l
 		}
 	}
 	return gen.Write(roots, outs)
+}
+
+// descriptorSet runs the descriptor-set protoc run into a temporary file and
+// reads the set back.
+func descriptorSet(r *protoc.Runner, files []string) (*descriptorpb.FileDescriptorSet, error) {
+	f, err := os.CreateTemp("", "grpc-service-mesh-gen-*.pb")
+	if err != nil {
+		return nil, err
+	}
+	name := f.Name()
+	defer func() { _ = os.Remove(name) }()
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+	if err := r.DescriptorSet(name, files); err != nil {
+		return nil, err
+	}
+	return gen.ReadSet(name)
 }
