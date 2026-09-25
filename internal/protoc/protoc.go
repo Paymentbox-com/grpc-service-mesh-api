@@ -22,7 +22,6 @@ type Runner struct {
 	Definitions string    // the definitions directory
 	Embedded    string    // directory holding the embedded spec files
 	Verbose     io.Writer // each command line is printed here when set
-	Protoc      string    // the protoc executable; "protoc" when empty
 }
 
 // WriteEmbedded writes the specification's proto files under dir, at their
@@ -124,28 +123,24 @@ func RubyMessageFiles(files []string) []string {
 }
 
 func (r *Runner) run(args []string, files []string) error {
-	name := r.Protoc
-	if name == "" {
-		name = "protoc"
-	}
 	all := append([]string{
 		"--proto_path=" + r.Definitions,
 		"--proto_path=" + r.Embedded,
 	}, args...)
 	all = append(all, files...)
 	if r.Verbose != nil {
-		_, _ = fmt.Fprintln(r.Verbose, name, strings.Join(all, " "))
+		_, _ = fmt.Fprintln(r.Verbose, "protoc", strings.Join(all, " "))
 	}
-	cmd := exec.Command(name, all...)
+	cmd := exec.Command("protoc", all...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stderr
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
-			return fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+			return fmt.Errorf("protoc %s: %w", strings.Join(args, " "), err)
 		}
-		return fmt.Errorf("%s %s: %w\n%s", name, strings.Join(args, " "), err, msg)
+		return fmt.Errorf("protoc %s: %w\n%s", strings.Join(args, " "), err, msg)
 	}
 	return nil
 }
@@ -161,9 +156,7 @@ func (r *Runner) GoMessages(out string, files []string, importPaths map[string]s
 	args := []string{"--go_out=" + out, "--go_opt=paths=source_relative", "--go_opt=M" + OptionsProto + "=" + OptionsGoImport}
 	keys := make([]string, 0, len(importPaths))
 	for f := range importPaths {
-		if f != OptionsProto {
-			keys = append(keys, f)
-		}
+		keys = append(keys, f)
 	}
 	sort.Strings(keys)
 	for _, f := range keys {
