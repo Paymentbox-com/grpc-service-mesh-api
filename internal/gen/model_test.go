@@ -66,9 +66,30 @@ service WatchService { rpc Watch(Event) returns (stream Event); }
 	mustContain(t, got, "shop/watch.proto: WatchService.Watch streams")
 }
 
+func TestAnalyze_ClientStreamingRPC(t *testing.T) {
+	got := analyzeErr(t, map[string]string{
+		"shop/deployment.proto": shopDeployment,
+		"shop/upload.proto": header + `package shop;
+option go_package = "example.com/definitions/shop";
+message Chunk {}
+service UploadService { rpc Upload(stream Chunk) returns (Chunk); }
+`,
+	})
+	mustContain(t, got, "shop/upload.proto: UploadService.Upload streams")
+}
+
 func TestAnalyze_ServiceAtDefinitionsRoot(t *testing.T) {
 	got := analyzeErr(t, map[string]string{"order.proto": shopService})
 	mustContain(t, got, "order.proto: a file that declares a service must live in a directory under the definitions root")
+}
+
+func TestAnalyze_DeploymentGroupAtDefinitionsRoot(t *testing.T) {
+	got := analyzeErr(t, map[string]string{
+		"settings.proto":        header + "package root;\noption go_package = \"example.com/definitions/root\";\noption (mesh.deployment_group) = \"orders\";\n",
+		"shop/order.proto":      shopService,
+		"shop/deployment.proto": shopDeployment,
+	})
+	mustContain(t, got, "settings.proto: transport and deployment_group apply to a top-level directory; a file at the definitions root sets neither")
 }
 
 func TestAnalyze_TransportAtDefinitionsRoot(t *testing.T) {
