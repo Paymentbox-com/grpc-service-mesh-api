@@ -160,10 +160,10 @@ definitions/
 The generator is the Go program `grpc-service-mesh-gen` in this repository:
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.1
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.2
 ```
 
-or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.1`
+or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.2`
 with the same flags. `grpc-service-mesh-gen --help` describes every flag.
 
 One command generates everything for a definitions project:
@@ -193,18 +193,9 @@ definitions project imports that package and the project's module requires this 
 `mesh/options.proto` and writes `mesh/options_pb.rb` under `lib/ruby`, because the message files protoc writes require 
 it by that path.
 
-A descriptor set written elsewhere is given with `--descriptors` in place of `--definitions`:
-
-```sh
-protoc --proto_path=definitions --include_imports --include_source_info \
-       --descriptor_set_out=build/definitions.pb $(find definitions -name '*.proto')
-grpc-service-mesh-gen --descriptors build/definitions.pb --out lib --lang go,ruby
-```
-
-`--include_imports` puts `mesh/options.proto` and `google/protobuf/descriptor.proto` inside the set, so the
-generator reads the option values from the set alone and needs no compiled form of `options.proto`. Message classes
-come from the standard `protoc` runs for each language, and the generated code refers to them by the names
-those runs produce.
+The descriptor set carries `mesh/options.proto` and `google/protobuf/descriptor.proto` as imports, so the generator 
+reads the option values from the set alone and needs no compiled form of `options.proto`. Message classes come from the 
+standard `protoc` runs for each language, and the generated code refers to them by the names those runs produce.
 
 For each directory that contains at least one `service`, the generator writes one source file per requested language 
 into that directory's generated package, beside the standard message code. A directory that holds only messages is 
@@ -445,10 +436,10 @@ transport of the application's choice. The versions below are the current tags.
 ### The generator
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.1
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.2
 ```
 
-or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.1` 
+or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.1.2` 
 with the same flags. The generator runs `protoc` and, when Go is requested, `protoc-gen-go`, both found on `PATH`:
 
 ```sh

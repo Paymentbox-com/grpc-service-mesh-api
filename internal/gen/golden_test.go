@@ -24,11 +24,15 @@ func TestGolden_ExamplesPbx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, err := Generate(set, Options{Langs: []Lang{Go, Ruby}})
+	m, err := Analyze(set)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rooted, err := Generate(set, Options{
+	plain, err := Render(m, Options{Langs: []Lang{Go, Ruby}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rooted, err := Render(m, Options{
 		Langs:          []Lang{Go, Ruby},
 		GoRootPackage:  "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh",
 		RubyRootModule: "PmtboxMesh",

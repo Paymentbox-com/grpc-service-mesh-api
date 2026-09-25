@@ -7,26 +7,20 @@
 // Usage:
 //
 //	grpc-service-mesh-gen --definitions <dir> --out <dir> --lang go,ruby [--verbose]
-//	grpc-service-mesh-gen --descriptors <file> --out <dir> --lang go,ruby
 //	grpc-service-mesh-gen --definitions <dir> --go-out <dir> --ruby-out <dir> --lang go,ruby
 //	grpc-service-mesh-gen --definitions <dir> --out <dir> --lang go,ruby \
 //	    --go-root-package <import path[;name]> --ruby-root-module <Module>
 //
-// Exactly one of --definitions and --descriptors is given.
-//
-// --definitions <dir> names the definitions directory. Every *.proto under it
-// is compiled, with paths relative to it. protoc runs three ways: the message
-// code of each requested language (Go with --go_out=<go out>
-// --go_opt=paths=source_relative, Ruby with --ruby_out=<ruby out>), one
-// FileDescriptorSet of the whole directory with --include_imports
-// --include_source_info, and this generator over that set. Embedded copies of
-// mesh/options.proto and google/rpc/*.proto are added as a second
-// --proto_path, so a project need not vendor them; when it does, those four
-// files are left out of the message runs. protoc and protoc-gen-go are found
-// on PATH.
-//
-// --descriptors <file> names a FileDescriptorSet written by protoc with
-// --include_imports, in place of --definitions. No protoc run happens.
+// --definitions <dir> names the definitions directory and is required.
+// Every *.proto under it is compiled, with paths relative to it. protoc runs
+// three ways: the message code of each requested language (Go with
+// --go_out=<go out> --go_opt=paths=source_relative, Ruby with
+// --ruby_out=<ruby out>), one FileDescriptorSet of the whole directory with
+// --include_imports --include_source_info, and this generator over that set.
+// Embedded copies of mesh/options.proto and google/rpc/*.proto are added as a
+// second --proto_path, so a project need not vendor them; when it does, those
+// four files are left out of the message runs. protoc and protoc-gen-go are
+// found on PATH.
 //
 // --out <dir> is the output root; generated code goes to <out>/go and
 // <out>/ruby. It is required unless every requested language has its own
@@ -54,6 +48,6 @@
 //
 // --verbose prints each protoc command line and each file written.
 //
-// Exit status is 0 when every file was written, 1 with one line per error on
-// standard error otherwise, and 2 for a usage error.
+// Exit status is 0 when every file was written, 1 with the error on standard
+// error otherwise, and 2 for a usage error.
 package main

@@ -34,8 +34,8 @@ func TestParseLangs_Empty(t *testing.T) {
 	}
 }
 
-func TestGenerate_OneFilePerDirectoryPlusServiceMapsPerLanguage(t *testing.T) {
-	set := compile(t, map[string]string{
+func TestRender_OneFilePerDirectoryPlusServiceMapsPerLanguage(t *testing.T) {
+	m := analyze(t, map[string]string{
 		"pbx/deployment.proto": pbxDeployment,
 		"pbx/api_key.proto":    pbxService,
 		"pbx/internal/audit.proto": header + `package pbx.internal;
@@ -44,7 +44,7 @@ message Entry {}
 service AuditService { rpc Record(Entry) returns (Entry); }
 `,
 	})
-	outs, err := Generate(set, Options{Langs: []Lang{Go, Ruby}})
+	outs, err := Render(m, Options{Langs: []Lang{Go, Ruby}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,9 +66,9 @@ service AuditService { rpc Record(Entry) returns (Entry); }
 	}
 }
 
-func TestGenerate_OnlyRequestedLanguage(t *testing.T) {
-	set := compile(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
-	outs, err := Generate(set, Options{Langs: []Lang{Ruby}})
+func TestRender_OnlyRequestedLanguage(t *testing.T) {
+	m := analyze(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
+	outs, err := Render(m, Options{Langs: []Lang{Ruby}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,9 +77,9 @@ func TestGenerate_OnlyRequestedLanguage(t *testing.T) {
 	}
 }
 
-func TestGenerate_RootFilesAtEachLanguageRoot(t *testing.T) {
-	set := compile(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
-	outs, err := Generate(set, Options{Langs: []Lang{Go, Ruby}, GoRootPackage: "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", RubyRootModule: "PmtboxMesh"})
+func TestRender_RootFilesAtEachLanguageRoot(t *testing.T) {
+	m := analyze(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
+	outs, err := Render(m, Options{Langs: []Lang{Go, Ruby}, GoRootPackage: "github.com/Paymentbox-com/pmtbox_mesh;pmtboxmesh", RubyRootModule: "PmtboxMesh"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,56 +101,37 @@ func TestGenerate_RootFilesAtEachLanguageRoot(t *testing.T) {
 	}
 }
 
-func TestGenerate_RootFileOnlyForItsOwnLanguage(t *testing.T) {
-	set := compile(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
-	outs, err := Generate(set, Options{Langs: []Lang{Ruby}, GoRootPackage: "github.com/Paymentbox-com/pmtbox_mesh"})
+func TestRender_RootFileOnlyForItsOwnLanguage(t *testing.T) {
+	m := analyze(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
+	outs, err := Render(m, Options{Langs: []Lang{Ruby}, GoRootPackage: "github.com/Paymentbox-com/pmtbox_mesh"})
 	if err != nil || len(outs) != 2 {
 		t.Fatalf("outputs %+v, err %v", outs, err)
 	}
 }
 
-func TestGenerate_RootErrorStopsEveryOutput(t *testing.T) {
-	set := compile(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
-	outs, err := Generate(set, Options{Langs: []Lang{Go, Ruby}, GoRootPackage: "github.com/Paymentbox-com/pbx", RubyRootModule: "PmtboxMesh"})
+func TestRender_RootErrorStopsEveryOutput(t *testing.T) {
+	m := analyze(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
+	outs, err := Render(m, Options{Langs: []Lang{Go, Ruby}, GoRootPackage: "github.com/Paymentbox-com/pbx", RubyRootModule: "PmtboxMesh"})
 	if outs != nil || err == nil || err.Error() != "root package pbx: pbx/api_key.proto generates a package with the same name\n"+
 		"root package pbx: pbx/deployment.proto generates a package with the same name" {
 		t.Fatalf("outputs %+v, err %v", outs, err)
 	}
 }
 
-func TestGenerate_NothingWithoutServices(t *testing.T) {
-	set := compile(t, map[string]string{"common/id.proto": "syntax = \"proto3\";\npackage common;\nmessage Id {}\n"})
-	outs, err := Generate(set, Options{Langs: []Lang{Go, Ruby}})
+func TestRender_NothingWithoutServices(t *testing.T) {
+	m := analyze(t, map[string]string{"common/id.proto": "syntax = \"proto3\";\npackage common;\nmessage Id {}\n"})
+	outs, err := Render(m, Options{Langs: []Lang{Go, Ruby}})
 	if err != nil || len(outs) != 0 {
 		t.Fatalf("outputs %+v, err %v", outs, err)
 	}
 }
 
-func TestGenerate_NoOutputOnAnalysisError(t *testing.T) {
-	set := compile(t, map[string]string{"pbx/api_key.proto": pbxService})
-	outs, err := Generate(set, Options{Langs: []Lang{Go, Ruby}})
-	if err == nil || outs != nil {
-		t.Fatalf("outputs %+v, err %v", outs, err)
-	}
-}
-
-func TestGenerate_GoPackageErrorReportedOnceAcrossFiles(t *testing.T) {
-	set := compile(t, map[string]string{
+func TestRender_RubyDoesNotNeedGoPackage(t *testing.T) {
+	m := analyze(t, map[string]string{
 		"pbx/deployment.proto": pbxDeployment,
 		"pbx/api_key.proto":    header + "package pbx;\nmessage ApiKey {}\nservice ApiKeyService { rpc Search(ApiKey) returns (ApiKey); }\n",
 	})
-	_, err := Generate(set, Options{Langs: []Lang{Go, Ruby}})
-	if err == nil || err.Error() != "pbx/api_key.proto: go_package is not set; every file in a directory that declares a service sets the same go_package" {
-		t.Fatalf("err %v", err)
-	}
-}
-
-func TestGenerate_RubyDoesNotNeedGoPackage(t *testing.T) {
-	set := compile(t, map[string]string{
-		"pbx/deployment.proto": pbxDeployment,
-		"pbx/api_key.proto":    header + "package pbx;\nmessage ApiKey {}\nservice ApiKeyService { rpc Search(ApiKey) returns (ApiKey); }\n",
-	})
-	outs, err := Generate(set, Options{Langs: []Lang{Ruby}})
+	outs, err := Render(m, Options{Langs: []Lang{Ruby}})
 	if err != nil || len(outs) != 2 {
 		t.Fatalf("outputs %+v, err %v", outs, err)
 	}
@@ -166,30 +147,11 @@ func TestWrite_PutsFilesUnderEachLanguageRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) != 2 || paths[0] != filepath.Join(out, "golang", "pbx", "pbx.grpcmesh.go") || paths[1] != filepath.Join(out, "rb", "service_maps.rb") {
+	if len(paths) != 2 || paths[0] != filepath.Join(out, "rb", "service_maps.rb") || paths[1] != filepath.Join(out, "golang", "pbx", "pbx.grpcmesh.go") {
 		t.Fatalf("paths %v", paths)
 	}
-	b, err := os.ReadFile(paths[0])
+	b, err := os.ReadFile(paths[1])
 	if err != nil || string(b) != "go" {
 		t.Fatalf("content %q, %v", b, err)
 	}
-}
-
-func TestWrite_LanguageWithoutARootIsAnError(t *testing.T) {
-	_, err := Write(map[Lang]string{Go: t.TempDir()}, []Output{{Lang: Ruby, Path: "service_maps.rb"}})
-	if err == nil || err.Error() != "no output root for ruby" {
-		t.Fatalf("err %v", err)
-	}
-}
-
-func TestReadSet_NotADescriptorSet(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "x.pb")
-	if err := os.WriteFile(p, []byte("\xff\xff\xff"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	_, err := ReadSet(p)
-	if err == nil {
-		t.Fatal("no error")
-	}
-	mustContain(t, err.Error(), "not a FileDescriptorSet")
 }
