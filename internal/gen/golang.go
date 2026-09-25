@@ -15,17 +15,17 @@ const (
 	meshImport     = "github.com/Paymentbox-com/service-mesh-go/mesh"
 )
 
-// goImports assigns a local name to every imported package, aliasing when the
-// name protoc-gen-go would use is taken or differs from the path's last
-// element.
+// goImports assigns a local name to every imported package, numbering the
+// name when it is taken.
 type goImports struct {
 	self  string            // import path of the package being written
 	local map[string]string // import path -> local name
+	name  map[string]string // import path -> package name
 	taken map[string]bool
 }
 
 func newGoImports(self string, reserved ...string) *goImports {
-	im := &goImports{self: self, local: map[string]string{}, taken: map[string]bool{}}
+	im := &goImports{self: self, local: map[string]string{}, name: map[string]string{}, taken: map[string]bool{}}
 	for _, r := range reserved {
 		im.taken[r] = true
 	}
@@ -43,6 +43,7 @@ func (im *goImports) use(importPath, name string) string {
 	}
 	im.taken[local] = true
 	im.local[importPath] = local
+	im.name[importPath] = name
 	return local
 }
 
@@ -53,33 +54,22 @@ func (im *goImports) blank(importPath string) {
 	}
 }
 
-// block renders the import block: standard library first, then the rest,
-// each group sorted by path.
+// block renders the import block, sorted by path. A package is aliased when
+// its local name is not its package name.
 func (im *goImports) block() string {
-	var std, other []string
-	for p, local := range im.local {
-		line := strconv.Quote(p)
-		if local != goIdent(path.Base(p)) {
-			line = local + " " + line
-		}
-		if strings.Contains(strings.SplitN(p, "/", 2)[0], ".") {
-			other = append(other, line)
-		} else {
-			std = append(std, line)
-		}
+	paths := make([]string, 0, len(im.local))
+	for p := range im.local {
+		paths = append(paths, p)
 	}
-	sort.Strings(std)
-	sort.Strings(other)
+	sort.Strings(paths)
 	var b strings.Builder
 	b.WriteString("import (\n")
-	for _, l := range std {
-		b.WriteString("\t" + l + "\n")
-	}
-	if len(std) > 0 && len(other) > 0 {
-		b.WriteString("\n")
-	}
-	for _, l := range other {
-		b.WriteString("\t" + l + "\n")
+	for _, p := range paths {
+		b.WriteString("\t")
+		if local := im.local[p]; local != im.name[p] {
+			b.WriteString(local + " ")
+		}
+		b.WriteString(strconv.Quote(p) + "\n")
 	}
 	b.WriteString(")\n")
 	return b.String()

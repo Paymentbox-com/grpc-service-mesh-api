@@ -71,7 +71,7 @@ service PingService { rpc Ping(google.protobuf.Empty) returns (google.protobuf.E
 	mustContain(t, src, "grpcmesh.Call[*emptypb.Empty, *emptypb.Empty](ctx, PingTargets.Ping, req)")
 }
 
-func TestGoFile_CrossDirectoryImportWithAliasWhenNameDiffers(t *testing.T) {
+func TestGoFile_CrossDirectoryImportOfAPackageNamedAfterSemicolon(t *testing.T) {
 	_, src := render(t, map[string]string{
 		"pbx/deployment.proto": pbxDeployment,
 		"pbx/types/id.proto":   "syntax = \"proto3\";\npackage pbx.types;\noption go_package = \"github.com/Paymentbox-com/pbx/types;pbxtypes\";\nmessage Id { message Inner {} }\n",
@@ -81,7 +81,7 @@ option go_package = "github.com/Paymentbox-com/pbx";
 service LookupService { rpc Find(pbx.types.Id) returns (pbx.types.Id.Inner); }
 `,
 	}, GoFile)
-	mustContain(t, src, "\tpbxtypes \"github.com/Paymentbox-com/pbx/types\"\n")
+	mustContain(t, src, "\t\"github.com/Paymentbox-com/pbx/types\"\n")
 	mustContain(t, src, "Find func(context.Context, *pbxtypes.Id) (*pbxtypes.Id_Inner, error)")
 }
 
