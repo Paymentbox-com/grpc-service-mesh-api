@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -76,6 +77,7 @@ type Source struct {
 	Package     string
 	GoPackage   string
 	RubyPackage string
+	RootPrefix  string // mesh.root_prefix of the file's directory; empty when none applies
 	Desc        protoreflect.FileDescriptor
 	Services    []Service // the file's services, in declaration order
 }
@@ -121,9 +123,9 @@ func (m *Model) Transports() []string {
 
 // options is the set of mesh.* extension types found in the descriptor set.
 type options struct {
-	kind, consumerGroup, deploymentGroup, transport protoreflect.ExtensionType
-	types                                           *protoregistry.Types
-	files                                           *protoregistry.Files
+	kind, consumerGroup, deploymentGroup, transport, rootPrefix protoreflect.ExtensionType
+	types                                                       *protoregistry.Types
+	files                                                       *protoregistry.Files
 }
 
 func loadOptions(files *protoregistry.Files) (*options, error) {
@@ -141,6 +143,7 @@ func loadOptions(files *protoregistry.Files) (*options, error) {
 		{"mesh.consumer_group", &o.consumerGroup},
 		{"mesh.deployment_group", &o.deploymentGroup},
 		{"mesh.transport", &o.transport},
+		{"mesh.root_prefix", &o.rootPrefix},
 	} {
 		desc, err := files.FindDescriptorByName(x.name)
 		if errors.Is(err, protoregistry.NotFound) {
@@ -195,9 +198,14 @@ type fileInfo struct {
 	hasTransport       bool
 	deploymentGroup    string
 	hasDeploymentGroup bool
+	rootPrefix         string
+	hasRootPrefix      bool
 	goPackage          string
 	rubyPackage        string
 }
+
+// validRootPrefix is the form of a mesh.root_prefix value.
+var validRootPrefix = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 
 // Analyze reads a FileDescriptorSet into a Model, applying the
 // specification's directory rules. Every rule violation is reported; the
@@ -241,6 +249,31 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 		}
 		fi.transport, fi.hasTransport = opts.str(resolved, opts.transport)
 		fi.deploymentGroup, fi.hasDeploymentGroup = opts.str(resolved, opts.deploymentGroup)
+		fi.rootPrefix, fi.hasRootPrefix = opts.str(resolved, opts.rootPrefix)
+		if fi.hasRootPrefix && !validRootPrefix.MatchString(fi.rootPrefix) {
+			errs = append(errs, fmt.Errorf("%s: root_prefix %q is not an identifier; an uppercase ASCII letter followed by ASCII letters and digits is expected", fi.path, fi.rootPrefix))
+		}
+	}
+
+	// Root prefixes by directory, at most one file per directory setting one.
+	prefixFiles := map[string][]string{}
+	prefixes := map[string]string{}
+	for _, fi := range infos {
+		if fi.hasRootPrefix {
+			prefixFiles[fi.dir] = append(prefixFiles[fi.dir], fi.path)
+			prefixes[fi.dir] = fi.rootPrefix
+		}
+	}
+	for _, fi := range infos {
+		if f := prefixFiles[fi.dir]; len(f) > 1 && f[0] == fi.path {
+			errs = append(errs, fmt.Errorf("%s: root_prefix is set in more than one file: %s", fi.dir, strings.Join(f, ", ")))
+		}
+	}
+	rootPrefix := func(fi *fileInfo) string {
+		if p, ok := prefixes[fi.dir]; ok {
+			return p
+		}
+		return prefixes[fi.top]
 	}
 
 	// Top-level directories whose tree declares a service.
@@ -346,7 +379,8 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 		if isSource(fi.path) {
 			m.Sources = append(m.Sources, Source{
 				Path: fi.path, Package: string(fi.desc.Package()), GoPackage: fi.goPackage, RubyPackage: fi.rubyPackage,
-				Desc: fi.desc, Services: services[fi.path],
+				RootPrefix: rootPrefix(fi),
+				Desc:       fi.desc, Services: services[fi.path],
 			})
 		}
 	}

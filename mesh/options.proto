@@ -29,4 +29,6 @@ extend google.protobuf.FileOptions {
   // Names the transport the file's top-level directory is served over.
   // Exactly one file per top-level directory sets it.
   string transport = 50004;
+  // Prefixes every name the file's directory adds to a root package or module.
+  string root_prefix = 50005;
 }

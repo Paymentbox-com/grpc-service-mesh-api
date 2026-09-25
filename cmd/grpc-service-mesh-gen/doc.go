@@ -62,15 +62,18 @@
 // the --go_out directory, package <name>, aliasing every generated Go identifier of the definitions
 // tree: each message and enum type, each enum value constant, and each
 // RPCService type, client value, and targets value. <name> is the last
-// element of the import path unless given after ";", as in go_package. Every
-// aliased identifier is unique across the tree, and no directory package
-// shares the root package's name. Needs --go_out.
+// element of the import path unless given after ";", as in go_package. A
+// directory's option (mesh.root_prefix) is prepended to every identifier it
+// adds. Every aliased identifier is unique across the tree, and no directory
+// package shares the root package's name. Needs --go_out.
 //
 // --ruby-root-module <Module> also writes <snake_case(Module)>_grpcmesh.rb in
 // the --ruby_out directory, which requires every generated Ruby file and defines module <Module> with
 // a constant for every top-level message and enum, each RPCService, client,
-// and targets constant, and ServiceMaps. Every aliased constant is unique
-// across the tree, and no generated module shares the root module's name.
+// and targets constant, and ServiceMaps. A directory's option
+// (mesh.root_prefix) is prepended to every constant it adds. Every aliased
+// constant is unique across the tree, and no generated module shares the root
+// module's name.
 // Needs --ruby_out.
 //
 // --verbose prints each protoc command line and each file written.

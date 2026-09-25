@@ -203,3 +203,23 @@ func TestModel_TransportsSortedAndUnique(t *testing.T) {
 		t.Fatalf("transports %v", got)
 	}
 }
+
+func TestAnalyze_RootPrefixSetTwiceInOneDirectory(t *testing.T) {
+	got := analyzeErr(t, map[string]string{
+		"shop/deployment.proto": shopDeployment + "option (mesh.root_prefix) = \"Shop\";\n",
+		"shop/order.proto":      shopService + "option (mesh.root_prefix) = \"Shop\";\n",
+	})
+	if got != "shop: root_prefix is set in more than one file: shop/deployment.proto, shop/order.proto" {
+		t.Fatalf("got:\n%s", got)
+	}
+}
+
+func TestAnalyze_RootPrefixThatIsNotAnIdentifier(t *testing.T) {
+	got := analyzeErr(t, map[string]string{
+		"shop/deployment.proto": shopDeployment + "option (mesh.root_prefix) = \"shop_\";\n",
+		"shop/order.proto":      shopService,
+	})
+	if got != `shop/deployment.proto: root_prefix "shop_" is not an identifier; an uppercase ASCII letter followed by ASCII letters and digits is expected` {
+		t.Fatalf("got:\n%s", got)
+	}
+}

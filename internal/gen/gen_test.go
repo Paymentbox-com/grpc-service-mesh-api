@@ -131,3 +131,62 @@ func TestWrite_PutsFilesUnderEachLanguageRoot(t *testing.T) {
 		t.Fatalf("content %q, %v", b, err)
 	}
 }
+
+func TestRender_RootPrefixResolvesARootCollision(t *testing.T) {
+	m := analyze(t, map[string]string{
+		"shop/deployment.proto": shopDeployment,
+		"shop/order.proto":      shopService,
+		"billing/deployment.proto": header + `package billing;
+option go_package = "example.com/definitions/billing";
+option (mesh.transport) = "nats";
+option (mesh.root_prefix) = "Billing";
+message Order {}
+service OrderService { rpc Get(Order) returns (Order); }
+`,
+	})
+	outs, err := Render(m, Options{Langs: []Lang{Go, Ruby}, GoRootPackage: "example.com/definitions", RubyRootModule: "Definitions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var goSrc, rubySrc string
+	for _, o := range outs {
+		switch o.Path {
+		case "definitions.grpcmesh.go":
+			goSrc = string(o.Content)
+		case "definitions_grpcmesh.rb":
+			rubySrc = string(o.Content)
+		}
+	}
+	mustContain(t, goSrc, "type BillingOrder = billing.Order\n")
+	mustContain(t, goSrc, "type Order = shop.Order\n")
+	mustContain(t, goSrc, "var BillingOrderClient = billing.OrderClient\n")
+	mustContain(t, goSrc, "var OrderClient = shop.OrderClient\n")
+	mustContain(t, rubySrc, "  BillingOrder = ::Billing::Order\n")
+	mustContain(t, rubySrc, "  Order = ::Shop::Order\n")
+	mustContain(t, rubySrc, "  BillingOrderClient = ::Billing::OrderClient\n")
+	mustContain(t, rubySrc, "  OrderClient = ::Shop::OrderClient\n")
+}
+
+func TestRender_RootPrefixWithoutARootFileHasNoEffect(t *testing.T) {
+	plain := analyze(t, map[string]string{"shop/deployment.proto": shopDeployment, "shop/order.proto": shopService})
+	prefixed := analyze(t, map[string]string{
+		"shop/deployment.proto": shopDeployment + "option (mesh.root_prefix) = \"Shop\";\n",
+		"shop/order.proto":      shopService,
+	})
+	want, err := Render(plain, Options{Langs: []Lang{Go, Ruby}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Render(prefixed, Options{Langs: []Lang{Go, Ruby}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("outputs %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].Path != want[i].Path || string(got[i].Content) != string(want[i].Content) {
+			t.Fatalf("%s differs:\n%s", got[i].Path, got[i].Content)
+		}
+	}
+}

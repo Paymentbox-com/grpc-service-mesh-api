@@ -82,15 +82,19 @@ Flags:
       <name>, aliasing every generated Go identifier of the definitions tree: each message and enum
       type, each enum value, and each RPCService type, client, and targets
       value. <name> is the last element of the import path unless given after
-      ";", as in go_package. Every aliased identifier must be unique across
-      the tree, and no directory package may share the root package's name.
+      ";", as in go_package. A directory's option (mesh.root_prefix) is
+      prepended to every identifier it adds. Every aliased identifier must be
+      unique across the tree, and no directory package may share the root
+      package's name.
       Needs --go_out.
   --ruby-root-module <Module>
       Also write <snake_case(Module)>_grpcmesh.rb in the --ruby_out
       directory, requiring every generated Ruby file and defining module <Module> with a constant for
       every top-level message and enum, each RPCService, client, and targets
-      constant, and ServiceMaps. Every aliased constant must be unique across
-      the tree, and no generated module may share the root module's name.
+      constant, and ServiceMaps. A directory's option (mesh.root_prefix) is
+      prepended to every constant it adds. Every aliased constant must be
+      unique across the tree, and no generated module may share the root
+      module's name.
       Needs --ruby_out.
   --mesh-only
       Run only the FileDescriptorSet protoc run and write only the mesh
