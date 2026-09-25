@@ -7,6 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+
+	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/Paymentbox-com/grpc-service-mesh-api/internal/gen"
 	"github.com/Paymentbox-com/grpc-service-mesh-api/internal/protoc"
@@ -30,7 +33,8 @@ Flags:
       copies of mesh/options.proto and google/rpc/*.proto are added as a
       second --proto_path, so a project need not vendor them; when it does,
       those four files are left out of the message runs. protoc and
-      protoc-gen-go are found on PATH.
+      protoc-gen-go are found on PATH. A tree that declares no service is an
+      error.
   --out <dir>
       The output root. Generated code goes to <out>/go and <out>/ruby. Each
       directory of the definitions that declares a service gets
@@ -191,6 +195,9 @@ func generate(definitions string, roots map[gen.Lang]string, opts gen.Options, l
 	set, err := gen.ReadSet(setFile)
 	if err != nil {
 		return nil, err
+	}
+	if !slices.ContainsFunc(set.GetFile(), func(f *descriptorpb.FileDescriptorProto) bool { return len(f.GetService()) > 0 }) {
+		return nil, fmt.Errorf("no service declared under %s", definitions)
 	}
 	model, err := gen.Analyze(set)
 	if err != nil {

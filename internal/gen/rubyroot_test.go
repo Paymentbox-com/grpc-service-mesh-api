@@ -106,25 +106,6 @@ func TestRubyRoot_RubyPackageNamesTheSourceModule(t *testing.T) {
 	mustContain(t, src, "  ApiKeyClient = ::Paymentbox::Pbx::ApiKeyClient\n")
 }
 
-func TestRubyRoot_FileWithoutAPackageAliasesTopLevelConstants(t *testing.T) {
-	files := map[string]string{
-		"pbx/deployment.proto": pbxDeployment,
-		"pbx/api_key.proto":    pbxService,
-		"common/id.proto":      "syntax = \"proto3\";\nmessage Id {}\n",
-	}
-	_, src := rubyRoot(t, files, "PmtboxMesh")
-	mustContain(t, src, "  Id = ::Id\n")
-}
-
-func TestRubyRoot_TreeWithoutServicesHasNoServiceMaps(t *testing.T) {
-	files := map[string]string{"common/id.proto": "syntax = \"proto3\";\npackage common;\nmessage Id {}\n"}
-	_, src := rubyRoot(t, files, "PmtboxMesh")
-	mustNotContain(t, src, "service_maps")
-	mustNotContain(t, src, "ServiceMaps")
-	mustNotContain(t, src, "mesh/options_pb")
-	mustContain(t, src, "require \"common/id_pb\"\n\nmodule PmtboxMesh\n  # common/id.proto\n  Id = ::Common::Id\nend\n")
-}
-
 func TestRubyRoot_DuplicateConstantAcrossDirectories(t *testing.T) {
 	files := map[string]string{
 		"pbx/deployment.proto": pbxDeployment,

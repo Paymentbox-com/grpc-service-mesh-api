@@ -196,6 +196,20 @@ service ApiKeyService { rpc Watch(ApiKey) returns (stream ApiKey); }
 	}
 }
 
+func TestRun_NoServiceIsAnError(t *testing.T) {
+	defs := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(defs, "common"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(defs, "common", "id.proto"), []byte("syntax = \"proto3\";\npackage common;\nmessage Id {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run(t, "--definitions", defs, "--out", t.TempDir(), "--lang", "go,ruby")
+	if code != 1 || stderr != "grpc-service-mesh-gen: no service declared under "+defs+"\n" {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+}
+
 func TestRun_DefinitionsRunsProtocAndWritesEverything(t *testing.T) {
 	out := t.TempDir()
 	code, stdout, stderr := run(t, "--definitions", examples, "--out", out, "--lang", "go,ruby", "--verbose")

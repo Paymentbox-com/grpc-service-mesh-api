@@ -130,9 +130,6 @@ func rubyModule(pkg, rubyPackage string) string {
 	if rubyPackage != "" {
 		return rubyPackage
 	}
-	if pkg == "" {
-		return ""
-	}
 	segs := strings.Split(pkg, ".")
 	for i, s := range segs {
 		segs[i] = PascalCase(s)
@@ -148,11 +145,7 @@ func rubyMessageName(m MessageRef) string {
 	for i, p := range parts {
 		parts[i] = upperFirst(p)
 	}
-	name := strings.Join(parts, "::")
-	if mod == "" {
-		return name
-	}
-	return mod + "::" + name
+	return mod + "::" + strings.Join(parts, "::")
 }
 
 // rubyRequirePath is the load path of the *_pb.rb file protoc writes for a

@@ -197,9 +197,6 @@ func goService(b *bytes.Buffer, im *goImports, d Directory, s Service) error {
 		}
 	}
 	segments := append(strings.Split(s.Package, "."), s.Name)
-	if s.Package == "" {
-		segments = []string{s.Name}
-	}
 
 	fmt.Fprintf(b, "\n// %s holds one Target per rpc method of %s.\n", targets, s.Name)
 	fmt.Fprintf(b, "var %s = struct {\n", targets)

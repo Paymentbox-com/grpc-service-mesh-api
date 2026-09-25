@@ -130,26 +130,34 @@ type options struct {
 }
 
 func loadOptions(files *protoregistry.Files) (*options, error) {
+	if _, err := files.FindFileByPath("mesh/options.proto"); errors.Is(err, protoregistry.NotFound) {
+		return nil, errors.New("mesh/options.proto is not in the descriptor set; no definitions file imports it")
+	} else if err != nil {
+		return nil, err
+	}
 	o := &options{types: new(protoregistry.Types), files: files}
-	for name, dst := range map[protoreflect.FullName]*protoreflect.ExtensionType{
-		"mesh.kind":             &o.kind,
-		"mesh.consumer_group":   &o.consumerGroup,
-		"mesh.deployment_group": &o.deploymentGroup,
-		"mesh.transport":        &o.transport,
+	for _, x := range []struct {
+		name protoreflect.FullName
+		dst  *protoreflect.ExtensionType
+	}{
+		{"mesh.kind", &o.kind},
+		{"mesh.consumer_group", &o.consumerGroup},
+		{"mesh.deployment_group", &o.deploymentGroup},
+		{"mesh.transport", &o.transport},
 	} {
-		desc, err := files.FindDescriptorByName(name)
+		desc, err := files.FindDescriptorByName(x.name)
 		if errors.Is(err, protoregistry.NotFound) {
-			continue
+			return nil, fmt.Errorf("%s is not declared by mesh/options.proto", x.name)
 		}
 		if err != nil {
 			return nil, err
 		}
 		xd, ok := desc.(protoreflect.ExtensionDescriptor)
 		if !ok {
-			return nil, fmt.Errorf("%s is not an extension", name)
+			return nil, fmt.Errorf("%s is not an extension", x.name)
 		}
-		*dst = dynamicpb.NewExtensionType(xd)
-		if err := o.types.RegisterExtension(*dst); err != nil {
+		*x.dst = dynamicpb.NewExtensionType(xd)
+		if err := o.types.RegisterExtension(*x.dst); err != nil {
 			return nil, err
 		}
 	}
@@ -160,16 +168,13 @@ func loadOptions(files *protoregistry.Files) (*options, error) {
 // out of the unknown fields. The dynamic message is built on the set's own
 // descriptor of the options type, the one the extensions extend.
 func (o *options) resolve(opts proto.Message) (proto.Message, error) {
-	if o.transport == nil && o.deploymentGroup == nil && o.kind == nil && o.consumerGroup == nil {
-		return opts, nil // mesh/options.proto is not in the set, so nothing extends opts
-	}
 	b, err := proto.Marshal(opts)
 	if err != nil {
 		return nil, err
 	}
 	desc, err := o.files.FindDescriptorByName(opts.ProtoReflect().Descriptor().FullName())
 	if err != nil {
-		return nil, fmt.Errorf("%s is not in the descriptor set; protoc was run without --include_imports", opts.ProtoReflect().Descriptor().FullName())
+		return nil, err
 	}
 	dyn := dynamicpb.NewMessage(desc.(protoreflect.MessageDescriptor))
 	if err := (proto.UnmarshalOptions{Resolver: o.types}).Unmarshal(b, dyn); err != nil {
@@ -179,7 +184,7 @@ func (o *options) resolve(opts proto.Message) (proto.Message, error) {
 }
 
 func (o *options) str(m proto.Message, xt protoreflect.ExtensionType) (string, bool) {
-	if xt == nil || !proto.HasExtension(m, xt) {
+	if !proto.HasExtension(m, xt) {
 		return "", false
 	}
 	return proto.GetExtension(m, xt).(string), true
@@ -219,6 +224,9 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 
 	var errs []error
 	for _, fi := range infos {
+		if fi.desc.Package() == "" {
+			errs = append(errs, fmt.Errorf("%s: declares no package", fi.path))
+		}
 		fi.dir = path.Dir(fi.path)
 		fi.top = fi.dir
 		if i := strings.IndexByte(fi.dir, '/'); i >= 0 {
@@ -405,7 +413,7 @@ func buildService(fi *fileInfo, sd protoreflect.ServiceDescriptor, opts *options
 			Output: messageRef(md.Output()),
 		}
 		method.ConsumerGroup, _ = opts.str(resolved, opts.consumerGroup)
-		if opts.kind != nil && proto.HasExtension(resolved, opts.kind) {
+		if proto.HasExtension(resolved, opts.kind) {
 			switch n := proto.GetExtension(resolved, opts.kind).(protoreflect.EnumNumber); n {
 			case 0:
 				method.Kind = Route

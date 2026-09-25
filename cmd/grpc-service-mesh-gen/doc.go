@@ -20,7 +20,7 @@
 // Embedded copies of mesh/options.proto and google/rpc/*.proto are added as a
 // second --proto_path, so a project need not vendor them; when it does, those
 // four files are left out of the message runs. protoc and protoc-gen-go are
-// found on PATH.
+// found on PATH. A tree that declares no service is an error.
 //
 // --out <dir> is the output root; generated code goes to <out>/go and
 // <out>/ruby. It is required unless every requested language has its own

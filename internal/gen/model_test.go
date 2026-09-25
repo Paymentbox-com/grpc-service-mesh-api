@@ -80,6 +80,24 @@ func TestAnalyze_TransportAtDefinitionsRoot(t *testing.T) {
 	mustContain(t, got, "deployment.proto: transport and deployment_group apply to a top-level directory; a file at the definitions root sets neither")
 }
 
+func TestAnalyze_FileWithoutPackage(t *testing.T) {
+	got := analyzeErr(t, map[string]string{
+		"pbx/api_key.proto":    pbxService,
+		"pbx/deployment.proto": pbxDeployment,
+		"common/id.proto":      "syntax = \"proto3\";\nmessage Id {}\n",
+	})
+	if got != "common/id.proto: declares no package" {
+		t.Fatalf("got:\n%s", got)
+	}
+}
+
+func TestAnalyze_OptionsFileMissingFromTheSet(t *testing.T) {
+	got := analyzeErr(t, map[string]string{"common/id.proto": "syntax = \"proto3\";\npackage common;\nmessage Id {}\n"})
+	if got != "mesh/options.proto is not in the descriptor set; no definitions file imports it" {
+		t.Fatalf("got:\n%s", got)
+	}
+}
+
 func TestAnalyze_MessagesOnlyFileAtRootIsAllowed(t *testing.T) {
 	m := analyze(t, map[string]string{
 		"shared.proto":         "syntax = \"proto3\";\npackage shared;\nmessage Id { string value = 1; }\n",
@@ -174,15 +192,6 @@ func TestAnalyze_MessagesOnlyDirectoryGetsNoDirectory(t *testing.T) {
 		"common/id.proto":      "syntax = \"proto3\";\npackage common;\nmessage Id {}\n",
 	})
 	if len(m.Directories) != 1 || m.Directories[0].Path != "pbx" {
-		t.Fatalf("directories %+v", m.Directories)
-	}
-}
-
-func TestAnalyze_MessagesOnlyTopLevelDirectoryIsOutsideTheTransportRule(t *testing.T) {
-	m := analyze(t, map[string]string{
-		"common/id.proto": "syntax = \"proto3\";\npackage common;\nmessage Id {}\n",
-	})
-	if len(m.Directories) != 0 {
 		t.Fatalf("directories %+v", m.Directories)
 	}
 }

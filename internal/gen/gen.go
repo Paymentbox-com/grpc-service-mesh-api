@@ -90,9 +90,7 @@ func Render(m *Model, o Options) ([]Output, error) {
 		for _, d := range m.Directories {
 			emitters = append(emitters, func() (string, []byte, error) { return file(d) })
 		}
-		if len(m.Directories) > 0 {
-			emitters = append(emitters, func() (string, []byte, error) { return maps(m) })
-		}
+		emitters = append(emitters, func() (string, []byte, error) { return maps(m) })
 		switch {
 		case lang == Go && o.GoRootPackage != "":
 			emitters = append(emitters, func() (string, []byte, error) { return GoRoot(m, o.GoRootPackage) })

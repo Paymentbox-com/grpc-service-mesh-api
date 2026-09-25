@@ -199,7 +199,7 @@ standard `protoc` runs for each language, and the generated code refers to them 
 
 For each directory that contains at least one `service`, the generator writes one source file per requested language 
 into that directory's generated package, beside the standard message code. A directory that holds only messages is 
-valid and gets no file, and a definitions tree with no `service` at all produces no files. A `.proto` file at the 
+valid and gets no file, and a definitions tree with no `service` at all is a generator error. A `.proto` file at the 
 definitions root that declares a `service`, or sets `transport` or `deployment_group`, is a generator error; services 
 live in a directory under the root. A nested directory gets its own file in its own generated package, with the `deployment_group` 
 and `transport` of its top-level directory. The file is overwritten on every run and should not be edited by hand. 
@@ -256,6 +256,8 @@ lib/ruby/pmtbox_mesh_grpcmesh.rb    PmtboxMesh::ApiKey, ::ApiKeyService, ::ApiKe
 
 The generator stops with an error when:
 
+* the definitions tree declares no `service`; the error reads `no service declared under <definitions>`
+* a `.proto` file declares no `package`; the error reads `<file>: declares no package`
 * `transport` is unset, or set in more than one file, in a top-level directory
 * `deployment_group` is set to two different values in one top-level directory
 * `transport` or `deployment_group` is set in a nested directory

@@ -73,10 +73,7 @@ func RubyFile(d Directory) (string, []byte, error) {
 		groups[mod] = append(groups[mod], s)
 	}
 	for _, mod := range order {
-		var mods []string
-		if mod != "" {
-			mods = strings.Split(mod, "::")
-		}
+		mods := strings.Split(mod, "::")
 		b.WriteString("\n")
 		for i, m := range mods {
 			fmt.Fprintf(&b, "%smodule %s\n", strings.Repeat("  ", i), m)
@@ -99,9 +96,6 @@ func rubyService(b *bytes.Buffer, indent string, d Directory, s Service) {
 	base := upperFirst(BaseName(s.Name))
 	targets, client, service := base+"Targets", base+"Client", upperFirst(s.Name)
 	segments := append(strings.Split(s.Package, "."), s.Name)
-	if s.Package == "" {
-		segments = []string{s.Name}
-	}
 
 	fmt.Fprintf(b, "%smodule %s\n", indent, targets)
 	for _, m := range s.Methods {
@@ -162,12 +156,8 @@ func RubyServiceMaps(m *Model) (string, []byte, error) {
 			}
 			for _, s := range d.Services {
 				mod := rubyModule(s.Package, s.RubyPackage)
-				prefix := ""
-				if mod != "" {
-					prefix = mod + "::"
-				}
 				for _, mt := range s.Methods {
-					refs = append(refs, fmt.Sprintf("    %s%sTargets::%s", prefix, upperFirst(BaseName(s.Name)), ScreamingSnake(SnakeCase(mt.Name))))
+					refs = append(refs, fmt.Sprintf("    %s::%sTargets::%s", mod, upperFirst(BaseName(s.Name)), ScreamingSnake(SnakeCase(mt.Name))))
 				}
 			}
 		}
