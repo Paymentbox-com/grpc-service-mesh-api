@@ -6,6 +6,8 @@ package mesh;
 
 import "google/protobuf/descriptor.proto";
 
+option go_package = "github.com/Paymentbox-com/grpc-service-mesh-go/meshoptions";
+
 // Kind says whether a method replies.
 enum Kind {
   ROUTE = 0;
