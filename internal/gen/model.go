@@ -56,9 +56,6 @@ type File struct {
 	Path        string
 	GoPackage   string
 	RubyPackage string
-	// Empty is true for a file that declares no message, enum, extension or
-	// service, such as a directory's settings file.
-	Empty bool
 }
 
 // Directory is a directory of the definitions tree that declares at least
@@ -371,7 +368,6 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 				Path:        fi.path,
 				GoPackage:   fi.goPackage,
 				RubyPackage: fi.rubyPackage,
-				Empty:       fi.desc.Messages().Len() == 0 && fi.desc.Enums().Len() == 0 && fi.desc.Extensions().Len() == 0 && fi.desc.Services().Len() == 0,
 			})
 			d.Services = append(d.Services, services[fi.path]...)
 		}

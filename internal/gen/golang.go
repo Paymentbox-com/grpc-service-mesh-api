@@ -75,17 +75,19 @@ func (im *goImports) block() string {
 	return b.String()
 }
 
+// missingGoPackage is the error for a definitions file without go_package
+// when Go is requested.
+func missingGoPackage(file string) error {
+	return fmt.Errorf("%s: go_package is not set; every definitions file sets go_package when Go is requested", file)
+}
+
 // goPackageOf returns the directory's go_package, checking that every file
-// that declares something sets the same one. A settings-only file may leave
-// it unset; protoc-gen-go is then told the directory's import path for it.
+// sets the same one.
 func goPackageOf(d Directory) (string, error) {
 	var value, first string
 	for _, f := range d.Files {
 		if f.GoPackage == "" {
-			if f.Empty {
-				continue
-			}
-			return "", fmt.Errorf("%s: go_package is not set; every file in a directory that declares a service sets the same go_package", f.Path)
+			return "", missingGoPackage(f.Path)
 		}
 		if first == "" {
 			value, first = f.GoPackage, f.Path
@@ -96,26 +98,6 @@ func goPackageOf(d Directory) (string, error) {
 		}
 	}
 	return value, nil
-}
-
-// GoImportOverrides maps each file that sets no go_package, in a directory
-// that declares a service, to that directory's import path. The protoc Go
-// run receives them as --go_opt=M<file>=<path>.
-func GoImportOverrides(m *Model) map[string]string {
-	out := map[string]string{}
-	for _, d := range m.Directories {
-		goPkg, err := goPackageOf(d)
-		if err != nil {
-			continue
-		}
-		importPath, _ := splitGoPackage(goPkg)
-		for _, f := range d.Files {
-			if f.GoPackage == "" {
-				out[f.Path] = importPath
-			}
-		}
-	}
-	return out
 }
 
 // goTypeRef returns the Go pointer type of a message from inside pkgPath.

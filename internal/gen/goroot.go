@@ -4,14 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
-	"sort"
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
-
-	"github.com/Paymentbox-com/grpc-service-mesh-api"
 )
 
 // ParseGoRootPackage reads a --go-root-package value, an import path with an
@@ -31,17 +28,7 @@ func ParseGoRootPackage(s string) (importPath, name string, err error) {
 // goPlugin runs protoc-gen-go's front end over the model's sources, the way
 // the message run does, so the Go identifiers it would generate are known.
 func goPlugin(m *Model) (*protogen.Plugin, error) {
-	params := []string{"paths=source_relative", "M" + spec.OptionsProto + "=" + spec.OptionsGoImport}
-	overrides := GoImportOverrides(m)
-	files := make([]string, 0, len(overrides))
-	for f := range overrides {
-		files = append(files, f)
-	}
-	sort.Strings(files)
-	for _, f := range files {
-		params = append(params, "M"+f+"="+overrides[f])
-	}
-	req := &pluginpb.CodeGeneratorRequest{Parameter: proto.String(strings.Join(params, ","))}
+	req := &pluginpb.CodeGeneratorRequest{Parameter: proto.String("paths=source_relative")}
 	for _, src := range m.Sources {
 		req.FileToGenerate = append(req.FileToGenerate, src.Path)
 	}

@@ -151,7 +151,7 @@ extend google.protobuf.MessageOptions { string owner = 50100; }
 	mustNotContain(t, src, "common/options.proto")
 }
 
-func TestGoRoot_SettingsFileWithoutGoPackageLandsInItsDirectoryPackage(t *testing.T) {
+func TestGoRoot_SettingsFileSharesItsDirectoryPackageImport(t *testing.T) {
 	_, src := goRoot(t, rootFixture, "github.com/Paymentbox-com/pmtbox_mesh")
 	if strings.Count(src, "github.com/Paymentbox-com/pbx") != 1 {
 		t.Fatalf("one import of the pbx package expected:\n%s", src)

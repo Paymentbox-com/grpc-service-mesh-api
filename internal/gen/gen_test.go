@@ -118,6 +118,18 @@ func TestRender_RootErrorStopsEveryOutput(t *testing.T) {
 	}
 }
 
+func TestRender_GoNeedsGoPackageInEveryDefinitionsFile(t *testing.T) {
+	m := analyze(t, map[string]string{
+		"pbx/deployment.proto": pbxDeployment,
+		"pbx/api_key.proto":    pbxService,
+		"common/id.proto":      "syntax = \"proto3\";\npackage common;\nmessage Id {}\n",
+	})
+	outs, err := Render(m, Options{Langs: []Lang{Ruby, Go}})
+	if outs != nil || err == nil || err.Error() != "common/id.proto: go_package is not set; every definitions file sets go_package when Go is requested" {
+		t.Fatalf("outputs %+v, err %v", outs, err)
+	}
+}
+
 func TestRender_RubyDoesNotNeedGoPackage(t *testing.T) {
 	m := analyze(t, map[string]string{
 		"pbx/deployment.proto": pbxDeployment,

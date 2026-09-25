@@ -82,7 +82,7 @@ func mustNotContain(t *testing.T, got, want string) {
 const header = "syntax = \"proto3\";\nimport \"mesh/options.proto\";\n"
 
 // pbxDeployment is the settings file of the pbx directory used by most fixtures.
-const pbxDeployment = header + "package pbx;\noption (mesh.transport) = \"nats\";\n"
+const pbxDeployment = header + "package pbx;\noption go_package = \"github.com/Paymentbox-com/pbx\";\noption (mesh.transport) = \"nats\";\n"
 
 // pbxService declares pbx.ApiKeyService with a ROUTE and a TOPIC method.
 const pbxService = header + `package pbx;

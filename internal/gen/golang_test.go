@@ -11,7 +11,7 @@ func TestGoFile_MissingGoPackage(t *testing.T) {
 		"pbx/api_key.proto":    strings.Replace(pbxService, "option go_package = \"github.com/Paymentbox-com/pbx\";\n", "", 1),
 	})
 	_, _, err := GoFile(m.Directories[0])
-	if err == nil || err.Error() != "pbx/api_key.proto: go_package is not set; every file in a directory that declares a service sets the same go_package" {
+	if err == nil || err.Error() != "pbx/api_key.proto: go_package is not set; every definitions file sets go_package when Go is requested" {
 		t.Fatalf("err %v", err)
 	}
 }
@@ -28,17 +28,6 @@ func TestGoFile_InconsistentGoPackage(t *testing.T) {
 	}
 }
 
-func TestGoFile_SettingsFileWithoutGoPackageGetsTheDirectoryImportPath(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService})
-	if _, _, err := GoFile(m.Directories[0]); err != nil {
-		t.Fatal(err)
-	}
-	got := GoImportOverrides(m)
-	if len(got) != 1 || got["pbx/deployment.proto"] != "github.com/Paymentbox-com/pbx" {
-		t.Fatalf("overrides %v", got)
-	}
-}
-
 func TestGoFile_PathAndPackageName(t *testing.T) {
 	p, src := render(t, map[string]string{"pbx/deployment.proto": pbxDeployment, "pbx/api_key.proto": pbxService}, GoFile)
 	if p != "pbx/pbx.grpcmesh.go" {
@@ -51,7 +40,7 @@ func TestGoFile_PathAndPackageName(t *testing.T) {
 
 func TestGoFile_GoPackageWithExplicitName(t *testing.T) {
 	_, src := render(t, map[string]string{
-		"pbx/deployment.proto": pbxDeployment,
+		"pbx/deployment.proto": strings.Replace(pbxDeployment, "github.com/Paymentbox-com/pbx", "github.com/Paymentbox-com/pbx/v2;pbxv2", 1),
 		"pbx/api_key.proto":    strings.Replace(pbxService, "github.com/Paymentbox-com/pbx", "github.com/Paymentbox-com/pbx/v2;pbxv2", 1),
 	}, GoFile)
 	mustContain(t, src, "\npackage pbxv2\n")
@@ -151,7 +140,7 @@ func TestGoServiceMaps_SecondTransportGetsSecondVar(t *testing.T) {
 	m := analyze(t, map[string]string{
 		"pbx/deployment.proto":     pbxDeployment,
 		"pbx/api_key.proto":        pbxService,
-		"billing/deployment.proto": header + "package billing;\noption (mesh.transport) = \"http-json\";\n",
+		"billing/deployment.proto": header + "package billing;\noption go_package = \"github.com/Paymentbox-com/billing\";\noption (mesh.transport) = \"http-json\";\n",
 		"billing/invoice.proto": header + `package billing;
 option go_package = "github.com/Paymentbox-com/billing";
 message Invoice {}

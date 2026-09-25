@@ -81,23 +81,16 @@ func write(t *testing.T, path, content string) {
 // go_package names and the servicemaps package as a module beside it.
 func TestGoOutputVets(t *testing.T) {
 	out := generate(t)
-	root, err := filepath.Abs(repoRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
 	pbx := filepath.Join(out, "go", "pbx")
 	write(t, filepath.Join(pbx, "go.mod"), `module github.com/Paymentbox-com/pbx
 
 go 1.26.6
 
 require (
-	github.com/Paymentbox-com/grpc-service-mesh-api v0.0.0
-	github.com/Paymentbox-com/grpc-service-mesh-go v0.1.1
+	github.com/Paymentbox-com/grpc-service-mesh-go v0.7.0
 	github.com/Paymentbox-com/service-mesh-go v0.1.0
 	google.golang.org/protobuf v1.36.12
 )
-
-replace github.com/Paymentbox-com/grpc-service-mesh-api => `+root+`
 `)
 	sh(t, pbx, "go", "mod", "tidy")
 	sh(t, pbx, "go", "vet", "./...")
@@ -113,22 +106,24 @@ require (
 )
 
 replace github.com/Paymentbox-com/pbx => ../pbx
-
-replace github.com/Paymentbox-com/grpc-service-mesh-api => `+root+`
 `)
 	sh(t, maps, "go", "mod", "tidy")
 	sh(t, maps, "go", "vet", "./...")
 }
 
 // TestRubyOutputLoads requires the generated files against the published
-// gems and reads the map and a client method back.
+// gems and reads the map and a client method back. mesh/options_pb comes
+// from the grpc_service_mesh gem.
 func TestRubyOutputLoads(t *testing.T) {
 	out := generate(t)
 	ruby := filepath.Join(out, "ruby")
+	if _, err := os.Stat(filepath.Join(ruby, "mesh", "options_pb.rb")); !os.IsNotExist(err) {
+		t.Fatalf("mesh/options_pb.rb is in the output: %v", err)
+	}
 	write(t, filepath.Join(ruby, "Gemfile"), `source "https://rubygems.org"
 
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.1.0"
-gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.2.0"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.6.0"
+gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.4.0"
 gem "google-protobuf"
 gem "googleapis-common-protos-types"
 `)
@@ -138,6 +133,8 @@ raise "targets: #{ServiceMaps::NATS.targets.size}" unless ServiceMaps::NATS.targ
 raise "no search" unless Pbx::ApiKeyClient.respond_to?(:search)
 raise "no created" unless Pbx::ApiKeyClient.respond_to?(:created)
 raise "rpcs: #{Pbx::ApiKeyService.rpcs.keys}" unless Pbx::ApiKeyService.rpcs.keys.sort == [:created, :search]
+options = $LOADED_FEATURES.grep(%r{/mesh/options_pb\.rb\z})
+raise "mesh/options_pb from #{options}" unless options.size == 1 && options[0].end_with?("/lib/mesh/options_pb.rb") && options[0].include?("grpc-service-mesh-ruby")
 puts "loaded"
 `
 	got := sh(t, ruby, "bundle", "exec", "ruby", "-I"+ruby, "-e", script)
@@ -150,23 +147,16 @@ puts "loaded"
 // package at its root, the pbx directory package and servicemaps under it.
 func TestGoRootPackageVets(t *testing.T) {
 	out := generateWithRoots(t)
-	root, err := filepath.Abs(repoRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
 	goOut := filepath.Join(out, "go")
 	write(t, filepath.Join(goOut, "go.mod"), `module github.com/Paymentbox-com/pmtbox_mesh
 
 go 1.26.6
 
 require (
-	github.com/Paymentbox-com/grpc-service-mesh-api v0.0.0
-	github.com/Paymentbox-com/grpc-service-mesh-go v0.1.1
+	github.com/Paymentbox-com/grpc-service-mesh-go v0.7.0
 	github.com/Paymentbox-com/service-mesh-go v0.1.0
 	google.golang.org/protobuf v1.36.12
 )
-
-replace github.com/Paymentbox-com/grpc-service-mesh-api => `+root+`
 `)
 	write(t, filepath.Join(goOut, "use_test.go"), `package pmtboxmesh
 
@@ -193,8 +183,8 @@ func TestRubyRootModuleLoads(t *testing.T) {
 	ruby := filepath.Join(out, "ruby")
 	write(t, filepath.Join(ruby, "Gemfile"), `source "https://rubygems.org"
 
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.1.0"
-gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.2.0"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.6.0"
+gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.4.0"
 gem "google-protobuf"
 gem "googleapis-common-protos-types"
 `)

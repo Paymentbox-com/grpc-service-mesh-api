@@ -35,11 +35,6 @@ install:
 gen-example:
     UPDATE_GOLDEN=1 mise exec -- go test -count=1 ./internal/gen -run TestGolden
 
-# Regenerate mesh/options.pb.go, the compiled Go form of mesh/options.proto
-[group('build')]
-proto:
-    mise exec -- protoc --proto_path=. --go_out=. --go_opt=paths=source_relative --go_opt=Mmesh/options.proto=github.com/Paymentbox-com/grpc-service-mesh-api/mesh mesh/options.proto
-
 # Run go vet
 [group('checks')]
 vet:

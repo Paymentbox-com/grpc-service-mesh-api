@@ -196,14 +196,6 @@ func TestAnalyze_MessagesOnlyDirectoryGetsNoDirectory(t *testing.T) {
 	}
 }
 
-func TestAnalyze_SettingsFileIsMarkedEmpty(t *testing.T) {
-	m := analyze(t, map[string]string{"pbx/api_key.proto": pbxService, "pbx/deployment.proto": pbxDeployment})
-	files := m.Directories[0].Files
-	if files[0].Path != "pbx/api_key.proto" || files[0].Empty || files[1].Path != "pbx/deployment.proto" || !files[1].Empty {
-		t.Fatalf("files %+v", files)
-	}
-}
-
 func TestModel_TransportsSortedAndUnique(t *testing.T) {
 	m := &Model{Directories: []Directory{{Transport: "nats"}, {Transport: "http"}, {Transport: "nats"}}}
 	got := m.Transports()

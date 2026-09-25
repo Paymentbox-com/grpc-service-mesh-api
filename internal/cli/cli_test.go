@@ -2,10 +2,15 @@ package cli
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Paymentbox-com/grpc-service-mesh-api/internal/protoc"
 )
 
 var (
@@ -218,19 +223,21 @@ func TestRun_DefinitionsRunsProtocAndWritesEverything(t *testing.T) {
 	}
 	for _, p := range []string{
 		"go/pbx/api_key.pb.go", "go/pbx/deployment.pb.go", "go/pbx/pbx.grpcmesh.go", "go/servicemaps/servicemaps.go",
-		"ruby/mesh/options_pb.rb", "ruby/pbx/api_key_pb.rb", "ruby/pbx/deployment_pb.rb", "ruby/pbx/pbx_grpcmesh.rb", "ruby/service_maps.rb",
+		"ruby/pbx/api_key_pb.rb", "ruby/pbx/deployment_pb.rb", "ruby/pbx/pbx_grpcmesh.rb", "ruby/service_maps.rb",
 	} {
 		if _, err := os.Stat(filepath.Join(out, filepath.FromSlash(p))); err != nil {
 			t.Errorf("%s: %v", p, err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(out, "go", "mesh")); !os.IsNotExist(err) {
-		t.Errorf("Go code for mesh/options.proto was written: %v", err)
+	for _, p := range []string{"go/mesh", "ruby/mesh"} {
+		if _, err := os.Stat(filepath.Join(out, filepath.FromSlash(p))); !os.IsNotExist(err) {
+			t.Errorf("code for mesh/options.proto was written to %s: %v", p, err)
+		}
 	}
 	for _, want := range []string{
 		"--include_imports --include_source_info --descriptor_set_out=",
-		"--go_out=" + filepath.Join(out, "go") + " --go_opt=paths=source_relative --go_opt=Mmesh/options.proto=github.com/Paymentbox-com/grpc-service-mesh-api/mesh --go_opt=Mpbx/deployment.proto=github.com/Paymentbox-com/pbx pbx/api_key.proto pbx/deployment.proto",
-		"--ruby_out=" + filepath.Join(out, "ruby") + " pbx/api_key.proto pbx/deployment.proto mesh/options.proto",
+		"--go_out=" + filepath.Join(out, "go") + " --go_opt=paths=source_relative pbx/api_key.proto pbx/deployment.proto\n",
+		"--ruby_out=" + filepath.Join(out, "ruby") + " pbx/api_key.proto pbx/deployment.proto\n",
 		"wrote " + filepath.Join(out, "ruby", "service_maps.rb"),
 	} {
 		if !strings.Contains(stdout, want) {
@@ -291,16 +298,87 @@ func TestRun_VendoredSpecificationFilesAreSkippedInMessageRuns(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code %d, stderr:\n%s", code, stderr)
 	}
-	if !strings.Contains(stdout, "--go_opt=Mpbx/deployment.proto=github.com/Paymentbox-com/pbx pbx/api_key.proto pbx/deployment.proto\n") {
+	if !strings.Contains(stdout, "--go_opt=paths=source_relative pbx/api_key.proto pbx/deployment.proto\n") {
 		t.Errorf("Go run did not skip the specification files:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "--ruby_out="+filepath.Join(out, "ruby")+" mesh/options.proto pbx/api_key.proto pbx/deployment.proto\n") {
-		t.Errorf("Ruby run did not skip google/rpc or dropped the vendored options file:\n%s", stdout)
+	if !strings.Contains(stdout, "--ruby_out="+filepath.Join(out, "ruby")+" pbx/api_key.proto pbx/deployment.proto\n") {
+		t.Errorf("Ruby run did not skip the specification files:\n%s", stdout)
 	}
-	if _, err := os.Stat(filepath.Join(out, "go", "google")); !os.IsNotExist(err) {
-		t.Errorf("Go code for google/rpc was written: %v", err)
+	for _, p := range []string{"go/google", "go/mesh", "ruby/google", "ruby/mesh"} {
+		if _, err := os.Stat(filepath.Join(out, filepath.FromSlash(p))); !os.IsNotExist(err) {
+			t.Errorf("code for a specification file was written to %s: %v", p, err)
+		}
 	}
-	if _, err := os.Stat(filepath.Join(out, "ruby", "google")); !os.IsNotExist(err) {
-		t.Errorf("Ruby code for google/rpc was written: %v", err)
+}
+
+// TestRun_MessageOutputIsWhatPlainProtocWrites compiles examples/pbx with
+// protoc directly, the embedded specification files on the second -I, and
+// compares every message file the generator wrote to protoc's.
+func TestRun_MessageOutputIsWhatPlainProtocWrites(t *testing.T) {
+	out := t.TempDir()
+	if code, _, stderr := run(t, "--definitions", examples, "--out", out, "--lang", "go,ruby"); code != 0 {
+		t.Fatalf("code %d, stderr:\n%s", code, stderr)
 	}
+	embedded, err := protoc.WriteEmbedded(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := t.TempDir()
+	for _, p := range []string{"go", "ruby"} {
+		if err := os.MkdirAll(filepath.Join(plain, p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command("protoc", "-I", examples, "-I", embedded,
+		"--go_out="+filepath.Join(plain, "go"), "--go_opt=paths=source_relative",
+		"--ruby_out="+filepath.Join(plain, "ruby"),
+		"pbx/api_key.proto", "pbx/deployment.proto")
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("protoc: %v\n%s", err, b)
+	}
+
+	want := []string{"go/pbx/api_key.pb.go", "go/pbx/deployment.pb.go", "ruby/pbx/api_key_pb.rb", "ruby/pbx/deployment_pb.rb"}
+	if got := files(t, plain); !slices.Equal(got, want) {
+		t.Fatalf("plain protoc wrote %v, want %v", got, want)
+	}
+	generated := files(t, out)
+	for _, p := range want {
+		a, err := os.ReadFile(filepath.Join(plain, filepath.FromSlash(p)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(filepath.Join(out, filepath.FromSlash(p)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(a, b) {
+			t.Errorf("%s differs from plain protoc's", p)
+		}
+	}
+	messages := slices.DeleteFunc(generated, func(p string) bool {
+		return strings.HasSuffix(p, ".grpcmesh.go") || strings.HasSuffix(p, "_grpcmesh.rb") ||
+			p == "go/servicemaps/servicemaps.go" || p == "ruby/service_maps.rb"
+	})
+	if !slices.Equal(messages, want) {
+		t.Errorf("generator wrote message files %v, want %v", messages, want)
+	}
+}
+
+// files lists every file under dir as a sorted slash path relative to it.
+func files(t *testing.T, dir string) []string {
+	t.Helper()
+	var out []string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(dir, p)
+		out = append(out, filepath.ToSlash(rel))
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(out)
+	return out
 }

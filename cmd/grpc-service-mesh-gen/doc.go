@@ -17,9 +17,10 @@
 // --go_out=<go out> --go_opt=paths=source_relative, Ruby with
 // --ruby_out=<ruby out>), one FileDescriptorSet of the whole directory with
 // --include_imports --include_source_info, and this generator over that set.
-// Embedded copies of mesh/options.proto and google/rpc/*.proto are added as a
-// second --proto_path, so a project need not vendor them; when it does, those
-// four files are left out of the message runs. protoc and protoc-gen-go are
+// Embedded copies of mesh/options.proto and google/rpc/*.proto are the second
+// --proto_path. The message runs list the definitions files, leaving out any
+// copy of those four, and write what plain protoc writes for them. With go in
+// --lang, every definitions file sets go_package. protoc and protoc-gen-go are
 // found on PATH. A tree that declares no service is an error.
 //
 // --out <dir> is the output root; generated code goes to <out>/go and

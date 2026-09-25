@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -72,52 +73,15 @@ func FindProtos(definitions string) ([]string, error) {
 	return out, nil
 }
 
-// OptionsProto and OptionsGoImport are the specification's options file and
-// its compiled Go form, as spec defines them.
-const (
-	OptionsProto    = spec.OptionsProto
-	OptionsGoImport = spec.OptionsGoImport
-)
-
-// googleRPC lists the google/rpc files, whose compiled forms come from the
-// standard packages of each language: google.golang.org/genproto in Go and
-// the googleapis-common-protos-types gem in Ruby.
-var googleRPC = map[string]bool{
-	"google/rpc/code.proto":          true,
-	"google/rpc/status.proto":        true,
-	"google/rpc/error_details.proto": true,
-}
-
-// GoMessageFiles returns files without the specification's own; their
-// compiled forms are OptionsGoImport and genproto.
-func GoMessageFiles(files []string) []string {
+// MessageFiles returns files without copies of the specification's own
+// files. Those are only on the proto path; their compiled forms ship with the
+// language libraries and the standard google/rpc packages.
+func MessageFiles(files []string) []string {
 	var out []string
 	for _, f := range files {
-		if !googleRPC[f] && f != OptionsProto {
+		if !slices.Contains(spec.Paths, f) {
 			out = append(out, f)
 		}
-	}
-	return out
-}
-
-// RubyMessageFiles returns files without google/rpc, plus OptionsProto,
-// whose Ruby form no gem ships; the run writes <out>/ruby/mesh/options_pb.rb
-// from the vendored or embedded copy so the message files' require of it
-// resolves on the same load path.
-func RubyMessageFiles(files []string) []string {
-	var out []string
-	hasOptions := false
-	for _, f := range files {
-		if googleRPC[f] {
-			continue
-		}
-		if f == OptionsProto {
-			hasOptions = true
-		}
-		out = append(out, f)
-	}
-	if !hasOptions {
-		out = append(out, OptionsProto)
 	}
 	return out
 }
@@ -146,23 +110,11 @@ func (r *Runner) run(args []string, files []string) error {
 }
 
 // GoMessages writes the Go message code with paths=source_relative into out.
-// importPaths gives protoc-gen-go the import path of each file that sets no
-// go_package, as --go_opt=M<file>=<path>; OptionsProto always maps to
-// OptionsGoImport.
-func (r *Runner) GoMessages(out string, files []string, importPaths map[string]string) error {
+func (r *Runner) GoMessages(out string, files []string) error {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	args := []string{"--go_out=" + out, "--go_opt=paths=source_relative", "--go_opt=M" + OptionsProto + "=" + OptionsGoImport}
-	keys := make([]string, 0, len(importPaths))
-	for f := range importPaths {
-		keys = append(keys, f)
-	}
-	sort.Strings(keys)
-	for _, f := range keys {
-		args = append(args, "--go_opt=M"+f+"="+importPaths[f])
-	}
-	return r.run(args, GoMessageFiles(files))
+	return r.run([]string{"--go_out=" + out, "--go_opt=paths=source_relative"}, MessageFiles(files))
 }
 
 // RubyMessages writes the Ruby message code into out.
@@ -170,7 +122,7 @@ func (r *Runner) RubyMessages(out string, files []string) error {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	return r.run([]string{"--ruby_out=" + out}, RubyMessageFiles(files))
+	return r.run([]string{"--ruby_out=" + out}, MessageFiles(files))
 }
 
 // DescriptorSet writes one FileDescriptorSet for files, with imports and

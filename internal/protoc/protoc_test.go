@@ -52,26 +52,12 @@ func TestWriteEmbedded_WritesEveryFileAtItsImportPath(t *testing.T) {
 	}
 }
 
-func TestGoMessageFiles_SkipsTheSpecificationFiles(t *testing.T) {
-	got := GoMessageFiles([]string{
+func TestMessageFiles_SkipsCopiesOfTheSpecificationFiles(t *testing.T) {
+	got := MessageFiles([]string{
 		"google/rpc/code.proto", "google/rpc/error_details.proto", "google/rpc/status.proto",
 		"mesh/options.proto", "pbx/api_key.proto",
 	})
 	if len(got) != 1 || got[0] != "pbx/api_key.proto" {
-		t.Fatalf("got %v", got)
-	}
-}
-
-func TestRubyMessageFiles_SkipsGoogleRPCAndAddsOptions(t *testing.T) {
-	got := RubyMessageFiles([]string{"google/rpc/status.proto", "pbx/api_key.proto"})
-	if len(got) != 2 || got[0] != "pbx/api_key.proto" || got[1] != "mesh/options.proto" {
-		t.Fatalf("got %v", got)
-	}
-}
-
-func TestRubyMessageFiles_KeepsAVendoredOptionsFileOnce(t *testing.T) {
-	got := RubyMessageFiles([]string{"mesh/options.proto", "pbx/api_key.proto"})
-	if len(got) != 2 || got[0] != "mesh/options.proto" || got[1] != "pbx/api_key.proto" {
 		t.Fatalf("got %v", got)
 	}
 }

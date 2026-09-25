@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -78,8 +79,15 @@ type Options struct {
 }
 
 // Render emits every file of the model the options select, stopping at the
-// first error.
+// first error. When Go is requested, every source sets go_package.
 func Render(m *Model, o Options) ([]Output, error) {
+	if slices.Contains(o.Langs, Go) {
+		for _, src := range m.Sources {
+			if src.GoPackage == "" {
+				return nil, missingGoPackage(src.Path)
+			}
+		}
+	}
 	var outs []Output
 	for _, lang := range o.Langs {
 		file, maps := RubyFile, RubyServiceMaps
