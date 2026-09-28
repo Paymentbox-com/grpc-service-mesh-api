@@ -50,7 +50,8 @@ The handlers for `Endpoints` and `Subscribers` differ in their return value:
 
 An application implements only the method handlers it intends to serve. Decoding the inbound Service Mesh API `Message`
 into the proper type, and encoding a response type back into a `Message` is handled automatically so that the
-application doesn't need to touch the underlying layer.
+application doesn't need to touch the underlying layer. A `ROUTE` handler can set metadata on its reply, and the
+library's `Content-Type` and `Grpc-Status` keys take precedence over the handler's; each implementation documents how.
 
 An `RPCService` type keeps the name of the service it is generated from, such as `OrderService`. A root file may
 re-export it under a prefixed name, as described under [Root Package](#root-package), and the type itself keeps its name.
@@ -69,6 +70,8 @@ with.
 A `ROUTE` or `TOPIC` method encodes the standard, generated type into a `Message` addressed to the method's `Target` and sends that
 message through the appropriate transport-specific client that implements the Service Mesh API specification. A `ROUTE`
 method will get a `Message` back and decode it back into the standard, generated response type, then return that type.
+A caller of a `ROUTE` method can read the reply's metadata, on success and on a `MeshError`; each implementation
+documents how.
 
 An `RPCClient` holds no connection of its own. On each call it must resolve the transport-specific `Client` that
 serves the `Target`'s transport using the [`TransportRouter`](runtime-types.md#transportrouter).
