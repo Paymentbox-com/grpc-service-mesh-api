@@ -64,11 +64,11 @@ type orderClient struct{}
 var OrderClient orderClient
 
 // Place calls the ROUTE method Place.
-func (orderClient) Place(ctx context.Context, req *Order) (*Order, error) {
-	return grpcmesh.Call[*Order, *Order](ctx, OrderTargets.Place, req)
+func (orderClient) Place(ctx context.Context, req *Order, md map[string]string) (*Order, map[string]string, error) {
+	return grpcmesh.Call[*Order, *Order](ctx, OrderTargets.Place, req, md)
 }
 
 // Placed publishes to the TOPIC method Placed.
-func (orderClient) Placed(ctx context.Context, req *Order) error {
-	return grpcmesh.Publish(ctx, OrderTargets.Placed, req)
+func (orderClient) Placed(ctx context.Context, req *Order, md map[string]string) error {
+	return grpcmesh.Publish(ctx, OrderTargets.Placed, req, md)
 }

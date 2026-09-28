@@ -57,7 +57,7 @@ service PingService { rpc Ping(google.protobuf.Empty) returns (google.protobuf.E
 	}, GoFile)
 	mustContain(t, src, "\t\"google.golang.org/protobuf/types/known/emptypb\"\n")
 	mustContain(t, src, "Ping func(context.Context, *emptypb.Empty) (*emptypb.Empty, error)")
-	mustContain(t, src, "grpcmesh.Call[*emptypb.Empty, *emptypb.Empty](ctx, PingTargets.Ping, req)")
+	mustContain(t, src, "grpcmesh.Call[*emptypb.Empty, *emptypb.Empty](ctx, PingTargets.Ping, req, md)")
 }
 
 func TestGoFile_CrossDirectoryImportOfAPackageNamedAfterSemicolon(t *testing.T) {

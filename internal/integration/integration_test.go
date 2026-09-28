@@ -69,7 +69,7 @@ func TestGoOutputVets(t *testing.T) {
 go 1.26.6
 
 require (
-	github.com/Paymentbox-com/grpc-service-mesh-go v0.8.0
+	github.com/Paymentbox-com/grpc-service-mesh-go v0.14.0
 	github.com/Paymentbox-com/service-mesh-go v0.1.0
 	google.golang.org/protobuf v1.36.12
 )
@@ -104,7 +104,7 @@ func TestRubyOutputLoads(t *testing.T) {
 	}
 	write(t, filepath.Join(ruby, "Gemfile"), `source "https://rubygems.org"
 
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.12.0"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.14.0"
 gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.4.0"
 gem "google-protobuf"
 gem "googleapis-common-protos-types"
@@ -136,7 +136,7 @@ func TestGoRootPackageVets(t *testing.T) {
 go 1.26.6
 
 require (
-	github.com/Paymentbox-com/grpc-service-mesh-go v0.8.0
+	github.com/Paymentbox-com/grpc-service-mesh-go v0.14.0
 	github.com/Paymentbox-com/service-mesh-go v0.1.0
 	google.golang.org/protobuf v1.36.12
 )
@@ -166,7 +166,7 @@ func TestRubyRootModuleLoads(t *testing.T) {
 	ruby := filepath.Join(out, "ruby")
 	write(t, filepath.Join(ruby, "Gemfile"), `source "https://rubygems.org"
 
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.12.0"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.14.0"
 gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.4.0"
 gem "google-protobuf"
 gem "googleapis-common-protos-types"

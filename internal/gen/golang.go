@@ -238,12 +238,12 @@ func goService(b *bytes.Buffer, im *goImports, d Directory, s Service) error {
 	for i, m := range s.Methods {
 		if m.Kind == Route {
 			fmt.Fprintf(b, "\n// %s calls the ROUTE method %s.\n", m.Name, m.Name)
-			fmt.Fprintf(b, "func (%s) %s(ctx context.Context, req %s) (%s, error) {\n", clientType, m.Name, sigs[i].in, sigs[i].out)
-			fmt.Fprintf(b, "\treturn grpcmesh.Call[%s, %s](ctx, %s.%s, req)\n}\n", sigs[i].in, sigs[i].out, targets, m.Name)
+			fmt.Fprintf(b, "func (%s) %s(ctx context.Context, req %s, md map[string]string) (%s, map[string]string, error) {\n", clientType, m.Name, sigs[i].in, sigs[i].out)
+			fmt.Fprintf(b, "\treturn grpcmesh.Call[%s, %s](ctx, %s.%s, req, md)\n}\n", sigs[i].in, sigs[i].out, targets, m.Name)
 		} else {
 			fmt.Fprintf(b, "\n// %s publishes to the TOPIC method %s.\n", m.Name, m.Name)
-			fmt.Fprintf(b, "func (%s) %s(ctx context.Context, req %s) error {\n", clientType, m.Name, sigs[i].in)
-			fmt.Fprintf(b, "\treturn grpcmesh.Publish(ctx, %s.%s, req)\n}\n", targets, m.Name)
+			fmt.Fprintf(b, "func (%s) %s(ctx context.Context, req %s, md map[string]string) error {\n", clientType, m.Name, sigs[i].in)
+			fmt.Fprintf(b, "\treturn grpcmesh.Publish(ctx, %s.%s, req, md)\n}\n", targets, m.Name)
 		}
 	}
 	return nil

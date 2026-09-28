@@ -62,16 +62,21 @@ For each service the generator also emits an `RPCClient` type with one method pe
 callers reach the service. These methods have different method signatures based on the `Kind` they are defined
 with.
 
-| kind    | client method signature                                                                                      | Service Mesh API operation |
-|---------|--------------------------------------------------------------------------------------------------------------|----------------------------|
-| `ROUTE` | `(context, Request) -> (Response) [May return or raise a MeshError, depending on language/implementation]`   | `Request`                  |
-| `TOPIC` | `(context, Request) [May return or raise a MeshError, depending on language/implementation]`                 | `Publish`                  |
+| kind    | client method signature                                                                                                          | Service Mesh API operation |
+|---------|----------------------------------------------------------------------------------------------------------------------------------|----------------------------|
+| `ROUTE` | `(context, Request, Metadata) -> (Response, Metadata) [May return or raise a MeshError, depending on language/implementation]`   | `Request`                  |
+| `TOPIC` | `(context, Request, Metadata) [May return or raise a MeshError, depending on language/implementation]`                           | `Publish`                  |
 
 A `ROUTE` or `TOPIC` method encodes the standard, generated type into a `Message` addressed to the method's `Target` and sends that
 message through the appropriate transport-specific client that implements the Service Mesh API specification. A `ROUTE`
-method will get a `Message` back and decode it back into the standard, generated response type, then return that type.
-A caller of a `ROUTE` method can read the reply's metadata, on success and on a `MeshError`; each implementation
-documents how.
+method will get a `Message` back and decode it back into the standard, generated response type, then return that type
+along with the reply's metadata, on success and on a `MeshError`.
+
+The `Metadata` a caller passes is the `Message` metadata, except for keys that start with `Mesh-Option-`. Those keys are
+transport options: the client removes them from the `Message` metadata and passes each one to the transport's `Request`
+or `Publish` options with the prefix removed, so `Mesh-Option-request_timeout` becomes the option `request_timeout`.
+Keys with the prefix never appear in reply metadata. Each implementation documents how metadata is passed in its
+language; Ruby carries it on the request, response, and error objects.
 
 An `RPCClient` holds no connection of its own. On each call it must resolve the transport-specific `Client` that
 serves the `Target`'s transport using the [`TransportRouter`](runtime-types.md#transportrouter).
