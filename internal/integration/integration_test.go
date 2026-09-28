@@ -104,7 +104,7 @@ func TestRubyOutputLoads(t *testing.T) {
 	}
 	write(t, filepath.Join(ruby, "Gemfile"), `source "https://rubygems.org"
 
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.7.0"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.12.0"
 gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.4.0"
 gem "google-protobuf"
 gem "googleapis-common-protos-types"
@@ -114,6 +114,7 @@ gem "googleapis-common-protos-types"
 raise "targets: #{ServiceMaps::NATS.targets.size}" unless ServiceMaps::NATS.targets.size == 2
 raise "no place" unless Shop::OrderClient.respond_to?(:place)
 raise "no placed" unless Shop::OrderClient.respond_to?(:placed)
+raise "no mesh_metadata" unless Shop::Order.new.respond_to?(:mesh_metadata)
 raise "rpcs: #{Shop::OrderService.rpcs.keys}" unless Shop::OrderService.rpcs.keys.sort == [:place, :placed]
 options = $LOADED_FEATURES.grep(%r{/mesh/options_pb\.rb\z})
 raise "mesh/options_pb from #{options}" unless options.size == 1 && options[0].end_with?("/lib/mesh/options_pb.rb") && options[0].include?("grpc-service-mesh-ruby")
@@ -165,7 +166,7 @@ func TestRubyRootModuleLoads(t *testing.T) {
 	ruby := filepath.Join(out, "ruby")
 	write(t, filepath.Join(ruby, "Gemfile"), `source "https://rubygems.org"
 
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.7.0"
+gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.12.0"
 gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.4.0"
 gem "google-protobuf"
 gem "googleapis-common-protos-types"

@@ -6,6 +6,7 @@
 # deployment group: shop
 
 require "grpc_service_mesh"
+require "google/protobuf/empty_pb"
 require_relative "order_pb"
 
 module Shop
@@ -32,3 +33,6 @@ module Shop
     rpc :placed, target: OrderTargets::PLACED, input: Shop::Order, kind: :topic
   end
 end
+
+::Google::Protobuf::Empty.include(GrpcServiceMesh::Metadata)
+::Shop::Order.include(GrpcServiceMesh::Metadata)

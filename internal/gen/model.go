@@ -27,11 +27,12 @@ const (
 
 // MessageRef names a message type and the file that defines it.
 type MessageRef struct {
-	FullName    string // proto full name, such as shop.Order
-	Package     string // proto package of the defining file
-	File        string // path of the defining file, relative to the proto path
-	GoPackage   string // go_package option of the defining file
-	RubyPackage string // ruby_package option of the defining file
+	FullName    string   // proto full name, such as shop.Order
+	Package     string   // proto package of the defining file
+	File        string   // path of the defining file, relative to the proto path
+	GoPackage   string   // go_package option of the defining file
+	RubyPackage string   // ruby_package option of the defining file
+	FieldNames  []string // names of the message's fields, in declaration order
 }
 
 // Method is one rpc of a service.
@@ -462,11 +463,16 @@ func buildService(fi *fileInfo, sd protoreflect.ServiceDescriptor, opts *options
 func messageRef(md protoreflect.MessageDescriptor) MessageRef {
 	fd := md.ParentFile()
 	fo, _ := fd.Options().(*descriptorpb.FileOptions)
+	var fields []string
+	for i := 0; i < md.Fields().Len(); i++ {
+		fields = append(fields, string(md.Fields().Get(i).Name()))
+	}
 	return MessageRef{
 		FullName:    string(md.FullName()),
 		Package:     string(fd.Package()),
 		File:        fd.Path(),
 		GoPackage:   fo.GetGoPackage(),
 		RubyPackage: fo.GetRubyPackage(),
+		FieldNames:  fields,
 	}
 }

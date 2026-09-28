@@ -4,9 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 )
+
+// rubyMetadataField is the field name the Ruby message metadata accessor,
+// GrpcServiceMesh::Metadata#mesh_metadata, takes on every rpc message class.
+const rubyMetadataField = "mesh_metadata"
 
 func rubyKind(k Kind) string {
 	if k == Topic {
@@ -25,14 +30,20 @@ func rubyRequire(dir string, m MessageRef) string {
 	return fmt.Sprintf("require %s", rubyString(p))
 }
 
-// RubyFile renders the directory's <dir>_grpcmesh.rb.
+// RubyFile renders the directory's <dir>_grpcmesh.rb. After the services it
+// includes GrpcServiceMesh::Metadata into every message class an rpc of the
+// directory takes or returns.
 func RubyFile(d Directory) (string, []byte, error) {
 	requires := map[string]bool{}
+	includes := map[string]bool{}
 	for _, s := range d.Services {
 		for _, m := range s.Methods {
-			requires[rubyRequire(d.Path, m.Input)] = true
-			if m.Kind == Route {
-				requires[rubyRequire(d.Path, m.Output)] = true
+			for _, msg := range []MessageRef{m.Input, m.Output} {
+				if slices.Contains(msg.FieldNames, rubyMetadataField) {
+					return "", nil, fmt.Errorf("%s: %s declares a field named %s, which the Ruby message metadata accessor hides", msg.File, msg.FullName, rubyMetadataField)
+				}
+				requires[rubyRequire(d.Path, msg)] = true
+				includes[fmt.Sprintf("::%s.include(GrpcServiceMesh::Metadata)", rubyMessageName(msg))] = true
 			}
 		}
 	}
@@ -88,6 +99,16 @@ func RubyFile(d Directory) (string, []byte, error) {
 		for i := len(mods) - 1; i >= 0; i-- {
 			fmt.Fprintf(&b, "%send\n", strings.Repeat("  ", i))
 		}
+	}
+
+	lines := make([]string, 0, len(includes))
+	for l := range includes {
+		lines = append(lines, l)
+	}
+	sort.Strings(lines)
+	b.WriteString("\n")
+	for _, l := range lines {
+		b.WriteString(l + "\n")
 	}
 	return path.Join(d.Path, path.Base(d.Path)+"_grpcmesh.rb"), b.Bytes(), nil
 }

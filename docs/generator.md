@@ -4,7 +4,7 @@
 The generator is the Go program `grpc-service-mesh-gen` in this repository:
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.6.0
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.7.0
 grpc-service-mesh-gen --definitions definitions --go_out=lib/go --ruby_out=lib/ruby
 ```
 
@@ -63,6 +63,8 @@ The generator stops with an error when:
 * the Go root package's name equals a directory package's name, or the Ruby root module equals a generated module or
   `ServiceMaps`.
 * two files in one directory set `root_prefix`, or its value is not an identifier starting with an uppercase letter.
+* Ruby is requested and a message an `rpc` method takes or returns declares a field named `mesh_metadata`, which the
+  Ruby message metadata accessor hides.
 
 ## Using the Generator
 
@@ -79,11 +81,11 @@ Ruby needs no plugin; Ruby support is built into `protoc` itself.
 ### Installing and Running
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.6.0
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.7.0
 grpc-service-mesh-gen --definitions definitions --go_out=lib/go --ruby_out=lib/ruby
 ```
 
-`go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.6.0` runs it without installing.
+`go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.7.0` runs it without installing.
 The flags are described at the [top of this page](#generator).
 
 Each output directory mirrors the definitions tree. For `definitions/shop/order.proto` the generator writes:

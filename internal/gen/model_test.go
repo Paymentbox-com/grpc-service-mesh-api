@@ -1,6 +1,9 @@
 package gen
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestAnalyze_TransportUnset(t *testing.T) {
 	got := analyzeErr(t, map[string]string{"shop/order.proto": shopService})
@@ -200,7 +203,7 @@ func TestAnalyze_MessageReferencesCarryTheirFile(t *testing.T) {
 	m := analyze(t, map[string]string{"shop/order.proto": shopService, "shop/deployment.proto": shopDeployment})
 	out := m.Directories[0].Services[0].Methods[1].Output
 	want := MessageRef{FullName: "google.protobuf.Empty", Package: "google.protobuf", File: "google/protobuf/empty.proto", GoPackage: "google.golang.org/protobuf/types/known/emptypb"}
-	if out != want {
+	if !reflect.DeepEqual(out, want) {
 		t.Fatalf("output %+v", out)
 	}
 }
