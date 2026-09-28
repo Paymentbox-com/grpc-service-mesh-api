@@ -73,7 +73,7 @@ method will get a `Message` back and decode it back into the standard, generated
 along with the reply's metadata, on success and on a `MeshError`.
 
 The `Metadata` a caller passes is the `Message` metadata, except for keys that start with `Mesh-Option-`. Those keys are
-transport options: the client removes them from the `Message` metadata and passes each one to the transport's `Request`
+transport options. The client removes them from the `Message` metadata and passes each one to the transport's `Request`
 or `Publish` options with the prefix removed, so `Mesh-Option-request_timeout` becomes the option `request_timeout`.
 Keys with the prefix never appear in reply metadata. Each implementation documents how metadata is passed in its
 language; Ruby carries it on the request, response, and error objects.
