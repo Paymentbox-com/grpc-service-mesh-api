@@ -1,43 +1,46 @@
 # gRPC Service Mesh API
 
-The gRPC Service Mesh API is a service-mesh protocol layer specification 
-built on the [Service Mesh API Specification](https://github.com/Paymentbox-com/service-mesh-api) and driven by Google Protocol Buffers. It specifies how protobuf message and service definitions are
-translated into Service Mesh API primitives and consumed at the application level.
+The gRPC Service Mesh API is a service mesh protocol layer specification built on the
+[Service Mesh API Specification](https://github.com/Paymentbox-com/service-mesh-api) and driven by Google Protocol
+Buffers. It specifies how protobuf message and service definitions are translated into Service Mesh API primitives and
+consumed at the application level.
 
-Using this specification, libraries can be implemented across programming languages to compile the same 
-protobuf definitions into code that is compatible with the Service Mesh API and compatible with each other across 
-transports and language and transport specific runtimes.
+Using this specification, libraries can be implemented across programming languages to compile the same
+protobuf definitions into code that is compatible with the Service Mesh API and compatible with each other across
+transports and language- and transport-specific runtimes.
 
 ![ServiceMeshInterface.drawio.png](ServiceMeshInterface.drawio.png)
 
-## The Generator
+## Overview
 
-The gRPC Service Mesh API uses a generator, which reads `protoc` output to generate the necessary code to consume the 
-Service Mesh API. This specification defines how that generator interprets `.proto` files to generate that code. Currently 
+The gRPC Service Mesh API uses a generator, which reads `protoc` output to generate the necessary code to consume the
+Service Mesh API. This specification defines how that generator interprets `.proto` files to generate that code. Currently
 it supports Ruby and Go.
 
 ## Definitions
 
-The only inputs required for the gRPC Service Mesh API are `.proto` files and the descriptors the standard 
-`protoc` Go compiler produces from them (the Go compiler is used for all languages to generate the service mesh
-code regardless of language, but the standard compiler for each language generates the message types). The standard elements of a `.proto` file are translated into Service Mesh API 
-primitives as described below. In addition, a few options are defined to further control how the `.proto` files are 
-interpreted. 
+The only inputs required for the gRPC Service Mesh API are `.proto` files and the descriptors `protoc` produces from
+them. The generator, a Go program, reads those descriptors to write the service mesh code for every language, and the
+standard `protoc` plugin or built-in generator for each language writes the message types. The standard elements of a
+`.proto` file are translated into Service Mesh API primitives as described below. In addition, a few options are defined to further control how the `.proto` files are
+interpreted.
 
 ### Options
 
-The gRPC Service Mesh API uses protobuf's `Options` feature to specify details about the services defined in `.proto` 
-files that cannot be specified by the protobuf syntax otherwise. These details include the `transport` intended to be used 
-for any given set of services, the `Kind` a `Target`  and `Endpoint`/`Subscriber` generated from a service `rpc` method 
-should be, the `deployment_group` for a given set of services if the conventional default needs to be overridden, and the 
-`consumer_group` for any given `rpc` endpoint that is a `Subscriber`.
+The gRPC Service Mesh API uses protobuf's `Options` feature to specify details about the services defined in `.proto`
+files that cannot be specified by the protobuf syntax otherwise. These details include the `transport` intended to be used
+for any given set of services, the `Kind` a `Target` and `Endpoint`/`Subscriber` generated from a service `rpc` method
+should be, the `deployment_group` for a given set of services if the conventional default needs to be overridden, and the
+`consumer_group` for any given `rpc` method.
 
-These options are defined in the generator, and are as follows:
+These options are defined in `mesh/options.proto` in this repository, and are as follows:
 
 ```proto
 syntax = "proto3";
 package mesh;
 import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/Paymentbox-com/grpc-service-mesh-go/meshoptions";
 
 enum Kind {
   ROUTE = 0;
@@ -52,6 +55,7 @@ extend google.protobuf.MethodOptions {
 extend google.protobuf.FileOptions {
   string deployment_group = 50003;
   string transport = 50004;
+  string root_prefix = 50005;
 }
 ```
 
@@ -61,41 +65,43 @@ extend google.protobuf.FileOptions {
 | `consumer_group`   | a method | the `consumer_group` of the `Target` and the `Endpoint` or `Subscriber` generated from it | the `deployment_group` |
 | `deployment_group` | a file   | the `deployment_group` of every service in the file's top-level directory and the directories nested in it | the top-level directory name |
 | `transport`        | a file   | the transport the file's top-level directory is served over, as a string a library resolves at runtime; this specification does not enumerate transports | none; required |
+| `root_prefix`      | a file   | a prefix for every name the file's directory adds to a root package or module (see Root Package); a nested directory without its own uses its top-level directory's | none |
 
 No option is defined at the service or method level for `transport` or `deployment_group`, so a
-service cannot be split across different values, which is by design. These options are intended to be set in 
+service cannot be split across different values, which is by design. These options are intended to be set in
 their own file within the top-level directory to which they apply, such as `transport.proto` or `deployment.proto`.
 
 Importing and using these options in your own `.proto` files is done like this. The examples also set `go_package`,
 which every definitions file sets when Go code is generated from it.
 
 ```proto
-// definitions/pbx/deployment.proto: the directory's settings and nothing else
+// definitions/shop/deployment.proto: the directory's settings and nothing else
 syntax = "proto3";
-package pbx;
+package shop;
 import "mesh/options.proto";
 
-option go_package = "example.com/definitions/lib/go/pbx";
+option go_package = "example.com/definitions/shop";
 option (mesh.transport) = "nats";
-option (mesh.deployment_group) = "pbx";   // optional; the directory name is the default
+option (mesh.deployment_group) = "shop";   // optional; the directory name is the default
 ```
 
 ```proto
-// definitions/pbx/api_key.proto
+// definitions/shop/order.proto
 syntax = "proto3";
-package pbx;
+package shop;
 import "mesh/options.proto";
 import "google/protobuf/empty.proto";
 
-option go_package = "example.com/definitions/lib/go/pbx";
+option go_package = "example.com/definitions/shop";
 
-message ApiKey {
-  optional string first_name = 1;
+message Order {
+  optional string id = 1;
+  optional string item = 2;
 }
 
-service ApiKeyService {
-  rpc Search(ApiKey) returns (ApiKey);                       // ROUTE by default
-  rpc Created(ApiKey) returns (google.protobuf.Empty) {
+service OrderService {
+  rpc Place(Order) returns (Order);                          // ROUTE by default
+  rpc Placed(Order) returns (google.protobuf.Empty) {
     option (mesh.kind) = TOPIC;
     option (mesh.consumer_group) = "audit";
   }
@@ -103,65 +109,80 @@ service ApiKeyService {
 ```
 
 `mesh/options.proto` belongs to this specification and lives in this repository. A definitions project imports it by
-that path in its own `.proto` files. Its compiled forms ship with each language-specific implementation of this 
-specification. The generator puts the directory of this repository at its own version on the import path of every 
-`protoc` run, and `grpc-service-mesh-gen proto-path` prints that directory for plain `protoc`, as described under 
+that path in its own `.proto` files. Its compiled forms ship with each language-specific implementation of this
+specification. The generator puts the directory of this repository at its own version on the import path of every
+`protoc` run, and `grpc-service-mesh-gen proto-path` prints that directory for plain `protoc` runs, as described under
 Generation.
 
-`mesh/options.proto` changes only by adding. An extension's number, type, and name never change and are never reused, 
-a `Kind` value is never renumbered, and a later version of this specification only adds options or enum values. 
-Option values are stored by number, and a compiled copy older than the specification keeps an option it does not know 
-as an unknown field, so any generator version works with any library version.
+The protobuf definitions in this repository maintain backwards compatibility. The latest version of this specification
+and the generator will always hold the latest version of the options that it supports.
 
-The `google/rpc/*.proto` files belong to [googleapis](https://github.com/googleapis/googleapis). A definitions project 
-needs their `.proto` sources only when its own files import them, and then adds `-I` for a checkout of 
-`github.com/googleapis/googleapis`. Their compiled forms are the published ones, 
-`google.golang.org/genproto/googleapis/rpc` in Go and the `googleapis-common-protos-types` gem in Ruby.
+This specification uses certain proto definitions from `github.com/googleapis/googleapis`. Those definitions belong to
+[googleapis](https://github.com/googleapis/googleapis), and their compiled forms are included in the language-specific
+implementations of this specification. In the rare case when the definitions themselves need to be imported in a
+definitions project, their path inside a checkout of `github.com/googleapis/googleapis` can be passed to `protoc` with
+`-I`.
 
 ### Protobuf Messages
 
-The standard `protoc` compilers produce message types for each protobuf message type defined in the `.proto` files 
-they are aimed at. These generated types normally implement their own binary serialization, and are wrapped by a 
-protocol layer type that packages that binary serialization up as the `Payload` of a Service Mesh API Message type, 
-and provides conversion to and from the generated type and the Service Mesh Message type.
+The standard `protoc` compilers produce message types for each protobuf message type defined in the `.proto` files
+they are aimed at. These generated types normally implement their own binary serialization, which is used as the
+`Payload` of a Service Mesh API `Message`. Conversion of the generated types to and from Service Mesh API `Message` objects
+is handled behind the scenes by the `RPCClient` and `RPCService` types described below, so that the generated methods
+on `RPCClient` types and the `Endpoint` and `Subscriber` handlers held by `RPCService` types only deal with the generated
+types.
 
-The `Message` metadata carries `Content-Type: application/x-protobuf`.
-
-A `TOPIC` method has no reply, but protobuf requires every `rpc` to declare a return type, so a topic method declares
-one anyway, conventionally `google.protobuf.Empty`. That type is ignored everywhere: a publish sends only the request
-message, the subscriber's handler returns nothing, and the generated client method returns no value.
+A Service Mesh API `Message` created from a serialized generated type carries `Content-Type: application/x-protobuf` in
+its metadata.
 
 ### Protobuf Services
 
-Protobuf services defined in `.proto` files have their `rpc` methods translated into Service Mesh API `Targets`, as well as
-either an `Endpoint` or a `Subscriber`, depending on the `Kind` option set on the method (The default is `route`).
+Protobuf services defined in `.proto` files have their `rpc` methods translated into Service Mesh API `Targets`, and the
+services themselves are compiled into both an `RPCClient` type and an `RPCService` type.
 
-The `Targets` of every service are compiled into one `ServiceMap` per `transport`, holding a `Target` for every `rpc` 
+The `Targets` of every service are compiled into one `ServiceMap` per `transport`, holding a `Target` for every `rpc`
 method served over that transport across all deployment groups.
 
-## Directories, deployment groups, and transports
+An `RPCClient` type holds a client method for each `rpc` method in the proto definition, and an `RPCService` either
+accepts or stubs out a handler for each `rpc` method in the proto definition. Each handler is either an `Endpoint` or a
+`Subscriber` handler, depending on the `Kind` option set on the method in its proto definition (the default is `ROUTE`).
 
-The gRPC Service Mesh API convention is to have one directory contain the `.proto` files that define 
-one `deployment_group`, with its name being the name of the `deployment_group`. Each of these directories 
-lives inside a top level `definitions` directory the generator is pointed at. The `transport` rule and the 
-`deployment_group` default apply to every top-level directory whose tree contains at least one `service`. A directory 
-that holds only messages, such as one of message types shared by several deployment groups, is outside both rules, as 
-are the imported `mesh/options.proto` and `google/protobuf/*.proto` files.
+A method whose `Kind` is `TOPIC` has no reply, but protobuf requires every `rpc` to declare a return type, so a topic
+method declares one anyway, conventionally `google.protobuf.Empty` which ships inside `protoc` and is imported with
+`import "google/protobuf/empty.proto"`. That type, or any other type that is returned from a method with `TOPIC` as its
+`Kind`, is ignored everywhere. A publish sends only the request message without looking or waiting for a reply, the
+subscriber's handler returns nothing, and the generated client method returns no value.
 
-Nested directories within a top-level directory inherit its `deployment_group` and `transport`, and set neither 
+## Definitions Project Structure
+
+The gRPC Service Mesh API convention for definitions projects is to have a `definitions` directory that the generator is
+pointed at, with a nested directory for each `deployment_group`. The name `definitions` is a convention; the generator
+takes the path of any directory. Each top-level directory within `definitions/` must
+have a `transport` defined for it, as in the example above, if it contains at least one `service`. Likewise,
+`deployment_group` is only meaningful in a directory that contains at least one `service`, but it takes a default from
+the directory name.
+
+Nested directories within a top-level directory inherit its `deployment_group` and `transport`, and set neither
 themselves.
 
-Exactly one file in each top-level directory sets `transport`. The value is the name the application configures in the 
-`TransportRouter` (described below) for that transport, for example `nats`. The generator copies the string into the 
-generated code without interpreting it, and the `TransportRouter` resolves it at runtime.
+A directory that declares no `service`, such as one holding message types several deployment groups share, is valid
+and needs no `transport`. Its messages are generated as usual, and it gets no mesh file.
+
+Every file in one directory belongs to one generated package. When Go is generated, every file sets `go_package`, and
+every file in a directory sets the same value.
+
+Exactly one file in each top-level directory sets `transport`. The value is the name the application configures in the
+`TransportRouter` (described below) for that transport, for example `nats` or `http`. The generator copies the string
+into the generated code without interpreting it, and the `TransportRouter` resolves it at runtime against the configured
+transports.
 
 ```
 definitions/
-├── pbx/                       # deployment group "pbx"
+├── shop/                      # deployment group "shop"
 │   ├── deployment.proto       # option (mesh.transport) = "nats"
-│   ├── api_key.proto          # package pbx; ApiKeyService
+│   ├── order.proto            # package shop; OrderService
 │   └── internal/
-│       └── audit.proto        # package pbx.internal; inherits deployment group "pbx" and transport "nats"
+│       └── audit.proto        # package shop.internal; inherits deployment group "shop" and transport "nats"
 └── billing/                   # deployment group "billing"
     ├── deployment.proto       # option (mesh.transport) = "http"
     └── invoice.proto          # package billing; InvoiceService
@@ -169,241 +190,137 @@ definitions/
 
 ## Generation
 
-### Installing the generator
-
 The generator is the Go program `grpc-service-mesh-gen` in this repository:
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.4.0
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.6.0
+grpc-service-mesh-gen --definitions definitions --go_out=lib/go --ruby_out=lib/ruby
 ```
 
-or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.4.0`
-with the same flags. `grpc-service-mesh-gen --help` describes every flag.
+It compiles each language's message code with `protoc`, then writes the mesh code. Each directory that declares a
+`service` gets one mesh file per language beside its message code, and each language's output root gets the service
+maps. Every generated file starts with a `DO NOT EDIT` header and is overwritten on each run. Generated code depends on
+the language library and the Service Mesh API contract, and never on a transport. The tools it runs are listed under
+Prerequisites.
 
-One command generates everything for a definitions project:
+| flag | meaning |
+|---|---|
+| `--definitions <dir>` | the definitions directory |
+| `--go_out=<dir>`, `--ruby_out=<dir>` | a language's output directory, as `protoc` takes it; each one given requests that language |
+| `-I <dir>` | an extra import directory, repeatable; also spelled `--proto_path` |
+| `--mesh-only` | write only the mesh code and skip the message code |
+| `--go-root-package <path[;name]>`, `--ruby-root-module <Module>` | add a root file, described under Root Package |
+| `--verbose` | print each `protoc` command and each file written |
+
+### Import Path
+
+Every `protoc` run imports from `definitions` first, then the specification directory, then each `-I` directory in
+order, and compiles only the files under `definitions`. The specification directory is this repository's module at the
+generator's own version, taken from the Go module cache, and holds `mesh/options.proto`. `grpc-service-mesh-gen
+proto-path` prints it. A development build run from a checkout of this repository uses the checkout. A project whose
+files import `google/rpc/*.proto` adds `-I` for a checkout of `github.com/googleapis/googleapis`.
+
+### Compiling Message Code with Plain protoc
+
+The generator's message code is exactly what plain `protoc` writes, so a project can compile its message code itself
+and run the generator with `--mesh-only` for the rest:
 
 ```sh
-grpc-service-mesh-gen --definitions definitions --out lib --lang go,ruby
+spec="$(grpc-service-mesh-gen proto-path)"
+protoc -I definitions -I "$spec" --go_out=lib/go --go_opt=paths=source_relative $(find definitions -name '*.proto')
+protoc -I definitions -I "$spec" --ruby_out=lib/ruby $(find definitions -name '*.proto')
+grpc-service-mesh-gen --definitions definitions --go_out=lib/go --ruby_out=lib/ruby --mesh-only
 ```
 
-It runs `protoc` for the message code of each requested language (Go with `paths=source_relative` into `lib/go`,
-Ruby into `lib/ruby`), a `protoc` run that writes one `FileDescriptorSet` for the whole `definitions` directory with
-`--include_imports --include_source_info`, and the mesh generator over that set. Every run has `definitions` on its
-first `--proto_path`, then the specification directory, then each `-I` directory in the order given, and lists only the
-files under `definitions`. The message code it writes is what plain `protoc` writes for those files, as described under
-Compiling with plain protoc. `protoc` and `protoc-gen-go` are found on `PATH`.
+The commands list only the files under `definitions`, because the compiled form of `mesh/options.proto` comes from
+the language's implementation of this specification, as described under Options.
 
-The specification directory is the root of this repository's module at the generator's own version, the directory
-that holds `mesh/options.proto`. A generator installed or run at a version, such as `@v0.4.0`, takes that version's
-directory from the Go module cache with `go mod download -json`, which downloads it when needed. A development build,
-one whose version is `(devel)` or ends in `+dirty`, such as `go run ./cmd/grpc-service-mesh-gen` in a checkout, takes
-the root of the working directory's module from `go list -m` when that module is
-`github.com/Paymentbox-com/grpc-service-mesh-api`. `go` is found on `PATH`. `grpc-service-mesh-gen proto-path`
-resolves the directory the same way and prints it and nothing else:
+### Generated Packages
+
+Mesh code goes into the same package as the directory's message code. In Go that is the directory's `go_package`, so
+every file under `definitions` sets `go_package` when Go is generated, and every file in one directory sets the same
+value. In Ruby it is `ruby_package` when set, and otherwise the module `protoc` derives from the proto package: each
+dot-separated part capitalized and nested, so `shop.internal` is `Shop::Internal`.
+
+### Root Package
+
+The `--go-root-package <import path[;name]>` and `--ruby-root-module <Module>` options specify a root package name
+that re-exports every generated message, enum, service, client, and targets value under one namespace, so an
+application imports one package for convenience.
 
 ```sh
-grpc-service-mesh-gen proto-path
-go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.4.0 proto-path
+grpc-service-mesh-gen --definitions definitions --go_out=lib/go --ruby_out=lib/ruby \
+    --go-root-package "example.com/definitions;definitions" --ruby-root-module Definitions
 ```
 
-`-I <dir>` is repeatable and is also spelled `--proto_path <dir>` or `--proto_path=<dir>`, as `protoc` spells it. A
-project whose files import `google/rpc/*.proto` passes a checkout of `github.com/googleapis/googleapis` this way. When
-the specification directory cannot be resolved, the runs use the `-I` directories alone, and when neither
-`definitions` nor any `-I` directory holds `mesh/options.proto`, the generator stops before running `protoc` with an
-error that says why resolving failed:
-
 ```
-mesh/options.proto was not found on any -I path, and the specification directory could not be resolved: <reason>
+lib/go/definitions.grpcmesh.go      type Order = shop.Order, var OrderClient = shop.OrderClient, ...
+lib/ruby/definitions_grpcmesh.rb    Definitions::Order = ::Shop::Order, Definitions::OrderClient = ::Shop::OrderClient, ...
 ```
 
-Every other `protoc` error is reported as `protoc` writes it.
+A re-exported name is the name its directory's package gives it, so two directories that generate the same name
+collide and the generator stops with an error. `option (mesh.root_prefix)`, set in one file of a directory, prepends a
+prefix to every name that directory adds to the root files, and the directory's own package keeps its names. With
+`option (mesh.root_prefix) = "Billing";` in `definitions/billing/deployment.proto`, billing's `Order` is
+`definitions.BillingOrder` and `Definitions::BillingOrder` in the root files, while shop's stays `definitions.Order`.
 
-`--mesh-only` runs only the descriptor-set `protoc` run and writes only the mesh code: each `<dir>.grpcmesh.go` or
-`<dir>_grpcmesh.rb`, the service maps, and the root files described under Root package. A project that compiles its
-message code with its own `protoc` command, as described under Compiling with plain protoc, pairs that command with
-`--mesh-only`.
-
-`--go-out <dir>` and `--ruby-out <dir>` place one language's output at that directory in place of `<out>/go` or 
-`<out>/ruby`; `--out` stays the default for both. Each applies only to a language named in `--lang`:
-
-```sh
-grpc-service-mesh-gen --definitions definitions \
-    --go-out go/gen --ruby-out ruby/lib --lang go,ruby
-```
-
-The compiled forms of `mesh/options.proto` and `google/rpc/*.proto` come from the language libraries and the published 
-google/rpc packages, as described under Options. The Go message code of a file that imports `mesh/options.proto` imports 
-`github.com/Paymentbox-com/grpc-service-mesh-go/meshoptions`, and its Ruby message code requires `mesh/options_pb`, 
-which the `grpc_service_mesh` gem provides. A copy of `mesh/options.proto` or of `google/rpc/{code,status,error_details}.proto`
-under `definitions` is left out of the message runs.
-
-The descriptor set carries `mesh/options.proto` and `google/protobuf/descriptor.proto` as imports, so the generator 
-reads the option values from the set alone and needs no compiled form of `options.proto`. Message classes come from the 
-standard `protoc` runs for each language, and the generated code refers to them by the names those runs produce.
-
-For each directory that contains at least one `service`, the generator writes one source file per requested language 
-into that directory's generated package, beside the standard message code. A directory that holds only messages is 
-valid and gets no file, and a definitions tree with no `service` at all is a generator error. A `.proto` file at the 
-definitions root that declares a `service`, or sets `transport` or `deployment_group`, is a generator error; services 
-live in a directory under the root. A nested directory gets its own file in its own generated package, with the `deployment_group` 
-and `transport` of its top-level directory. The file is overwritten on every run and should not be edited by hand. 
-Generated code depends on the language library and on the Service Mesh API contract, but never on a transport-specific 
-implementation.
-
-A directory's generated package is the one the standard `protoc` run uses. In Go it is the `go_package` option. When Go 
-is requested, every file under `definitions` sets `go_package`, the settings file such as `deployment.proto` included, 
-and every file in a directory that declares a `service` sets the same one. In Ruby it is the `ruby_package` option when set, honoured the same 
-way protoc's Ruby generator honours it, and otherwise the module derived from the proto package.
-
-### Compiling with plain protoc
-
-The message code of a definitions project compiles with plain `protoc` and the standard plugins of any language. Every
-language uses one command, with `definitions` first on the import path and the specification directory second:
-
-```sh
-protoc -I definitions -I "$(grpc-service-mesh-gen proto-path)" --<lang>_out=<dir> $(find definitions -name '*.proto')
-```
-
-For Go and Ruby the command lists only the files under `definitions`, because the compiled forms of
-`mesh/options.proto` come from the language libraries.
-
-For Ruby, the `grpc_service_mesh` gem in the project's bundle holds `lib/mesh/options_pb.rb`, so the
-`require 'mesh/options_pb'` in each generated file resolves from the gem, and the `googleapis-common-protos-types` gem
-supplies the compiled `google/rpc` files.
-
-```sh
-protoc -I definitions -I "$(grpc-service-mesh-gen proto-path)" \
-  --ruby_out=lib/ruby $(find definitions -name '*.proto')
-```
-
-For Go, the project's `go.mod` requires `github.com/Paymentbox-com/grpc-service-mesh-go`. `mesh/options.proto` sets
-`go_package` to `github.com/Paymentbox-com/grpc-service-mesh-go/meshoptions`, the package in that module holding its
-compiled form, so `protoc-gen-go` resolves the import with no extra flag, and
-`google.golang.org/genproto/googleapis/rpc` supplies the compiled `google/rpc` packages.
-
-```sh
-protoc -I definitions -I "$(grpc-service-mesh-gen proto-path)" \
-  --go_out=lib/go --go_opt=paths=source_relative $(find definitions -name '*.proto')
-```
-
-A language without a published compiled form of `mesh/options.proto` adds
-`"$(grpc-service-mesh-gen proto-path)/mesh/options.proto"` to the file list, and the compiled forms of
-`google/rpc/*.proto` come from that language's published googleapis package. For Python:
-
-```sh
-protoc -I definitions -I "$(grpc-service-mesh-gen proto-path)" \
-  --python_out=lib/python $(find definitions -name '*.proto') "$(grpc-service-mesh-gen proto-path)/mesh/options.proto"
-```
-
-A project whose files import `google/rpc/*.proto` adds a third `-I` for a checkout of
-`github.com/googleapis/googleapis`, in these commands and in the generator's:
-
-```sh
-git clone --depth 1 https://github.com/googleapis/googleapis
-protoc -I definitions -I "$(grpc-service-mesh-gen proto-path)" -I googleapis \
-  --go_out=lib/go --go_opt=paths=source_relative $(find definitions -name '*.proto')
-```
-
-The generator's message runs are the Go and Ruby commands above. Given the same `-I` directories, they write the same
-files. A project that runs these commands itself runs the generator with `--mesh-only`, which writes the rest of the
-tree.
-
-### Root package
-
-A definitions project spread over several directories produces one generated package per directory, and an 
-application refers to each by its own import path or module. `--go-root-package <import path[;name]>` and 
-`--ruby-root-module <Module>` each add one file at the language's output root that re-exports every generated 
-identifier an application uses under one flat namespace. The per-directory packages remain the packages the message 
-types and services belong to, and a root alias is the same type or value under a second name, so what goes on the 
-wire is the directory package's message.
-
-```sh
-grpc-service-mesh-gen --definitions definitions --out lib --lang go,ruby \
-    --go-root-package "github.com/Paymentbox-com/pmtbox-mesh;pmtboxmesh" --ruby-root-module PmtboxMesh
-```
-
-In Go the file is `<go out>/<name>.grpcmesh.go` with `package <name>`, where `<name>` is the last element of the 
-import path unless given after `;` as in `go_package`. It imports every directory package that has generated code, as 
-a blank import when nothing from a package is aliased so that its `init` registration is linked, and declares 
-`type <Name> = <pkg>.<Name>` for every message type, nested ones included under protoc-gen-go's names such as 
-`Outer_Inner`, and every enum type; `const <Value> = <pkg>.<Value>` for every enum value constant; and, for each 
-service, `type <Service> = <pkg>.<Service>`, `var <Name>Client = <pkg>.<Name>Client`, and 
-`var <Name>Targets = <pkg>.<Name>Targets`. The Go identifiers are the ones protoc-gen-go generates, computed with its 
-own front end. The `servicemaps` package stays at `<go out>/servicemaps` and is imported by its own path.
-
-In Ruby the file is `<ruby out>/<snake_case(Module)>_grpcmesh.rb`, for `PmtboxMesh` `pmtbox_mesh_grpcmesh.rb`. It 
-requires every generated Ruby file by load-path name (the message files, each `<dir>_grpcmesh.rb`, and 
-`service_maps.rb`) and defines `module <Module>` with `<Name> = ::<GeneratedModule>::<Name>` for every 
-top-level message class, every top-level enum module, and each RPCService class, client class, and targets module, 
-plus `ServiceMaps = ::ServiceMaps`. Nested messages and enums are reached through their parent constant. The generated 
-module is the one protoc's Ruby generator uses, `ruby_package` when set and otherwise the PascalCased proto package.
-
-The root file requires every aliased Go identifier, or Ruby constant, to be unique across the whole definitions tree. 
-Two directories that both generate `ApiKey` are a generator error naming the identifier and both source files. A root 
-package name equal to a directory package name, or a root module equal to a generated module (`Pbx`) or to 
-`ServiceMaps`, is an error as well. With the root options set, the example under Usage also writes:
-
-```
-lib/go/pmtboxmesh.grpcmesh.go       package pmtboxmesh: ApiKey, ApiKeyService, ApiKeyClient, ApiKeyTargets
-lib/ruby/pmtbox_mesh_grpcmesh.rb    PmtboxMesh::ApiKey, ::ApiKeyService, ::ApiKeyClient, ::ApiKeyTargets, ::ServiceMaps
-```
-
-### Generator errors
+### Generator Errors
 
 The generator stops with an error when:
 
-* the definitions tree declares no `service`; the error reads `no service declared under <definitions>`
-* a `.proto` file declares no `package`; the error reads `<file>: declares no package`
-* `transport` is unset, or set in more than one file, in a top-level directory
-* `deployment_group` is set to two different values in one top-level directory
-* `transport` or `deployment_group` is set in a nested directory
-* a file at the definitions root declares a `service`, or sets `transport` or `deployment_group`
-* an `rpc` method streams in either direction
-* Go is requested and a file under `definitions` sets no `go_package`, or two files in a directory that declares a 
-  `service` set different values
-* a root package is requested and two files generate the same Go identifier, or the same Ruby constant; the error 
-  names the identifier and both files
-* the Go root package's name equals a directory package's name, or the Ruby root module equals a generated module or 
-  `ServiceMaps`
+* the definitions tree declares no `service`.
+* a `.proto` file declares no `package`.
+* a top-level directory with a `service` sets `transport` in no file or in more than one.
+* a top-level directory sets `deployment_group` to two different values.
+* a nested directory sets `transport` or `deployment_group`.
+* a file at the definitions root declares a `service` or sets `transport` or `deployment_group`.
+* an `rpc` method uses `stream` on its request or its response.
+* Go is requested and a file sets no `go_package`, which `protoc-gen-go` requires.
+* two files in one directory set different `go_package` values; the directory's mesh file lives in one package.
+* a root package is requested and two files generate the same name.
+* the Go root package's name equals a directory package's name, or the Ruby root module equals a generated module or
+  `ServiceMaps`.
+* two files in one directory set `root_prefix`, or its value is not an identifier starting with an uppercase letter.
 
-### Targets
+### Generated Service Mesh API Primitives
 
-Each rpc method becomes one Service Mesh API `Target`, and how the attributes of a `Target` are derived is as follows:
+#### Targets
+
+Each `rpc` method becomes one Service Mesh API `Target`, and how the attributes of a `Target` are derived is as follows:
 
 | field      | value                                                                 |
 |------------|-----------------------------------------------------------------------|
 | `segments` | the proto package split on `.`, then the service name, then the method name |
-| `kind`     | `:route` for `ROUTE`, `:topic` for `TOPIC`                            |
+| `kind`     | `route` for `ROUTE`, `topic` for `TOPIC`                              |
 | `metadata` | `deployment_group` from the directory's option or its name, `transport` from the directory's option, and `consumer_group` from the method's option when set |
 
-For the `ApiKeyService` shown under Options, in `definitions/pbx/` with `transport = "nats"`, the two `Target`s are:
+For the `OrderService` shown under Options, in `examples/shop/` with `transport = "nats"`, the two `Targets` would be:
 
-| field      | `Search`                                       | `Created`                                                             |
+| field      | `Place`                                        | `Placed`                                                              |
 |------------|------------------------------------------------|-----------------------------------------------------------------------|
-| `segments` | `["pbx", "ApiKeyService", "Search"]`           | `["pbx", "ApiKeyService", "Created"]`                                 |
-| `kind`     | `:route`                                       | `:topic`                                                              |
-| `metadata` | `deployment_group=pbx`, `transport=nats`       | `deployment_group=pbx`, `transport=nats`, `consumer_group=audit`      |
+| `segments` | `["shop", "OrderService", "Place"]`            | `["shop", "OrderService", "Placed"]`                                  |
+| `kind`     | `route`                                        | `topic`                                                               |
+| `metadata` | `deployment_group=shop`, `transport=nats`      | `deployment_group=shop`, `transport=nats`, `consumer_group=audit`     |
 
-Targets are built at generation time and emitted as constants. Nothing reads
-options at runtime.
+`Targets` are built at generation time and emitted as constants. Nothing reads options at runtime.
 
-### ServiceMaps
+#### ServiceMaps
 
-A `ServiceMap` is simply a list of `Targets`, as defined by the Service Mesh API Specification. The gRPC Service Mesh API 
-requires one `ServiceMap` per `transport`, each holding only the `Targets` using that `transport`. The transport's map is 
-what an `RPCRuntime` hands to the underlying `Runtime` and what a `Client` for that transport accepts on construction.
+A `ServiceMap` is simply a list of `Targets`, as defined by the Service Mesh API Specification. The gRPC Service Mesh API
+requires one `ServiceMap` per `transport`, each holding only the `Targets` using that `transport`. The transport's map is
+what a `Client` for that transport accepts on construction, and a `Runtime` built from that `Client` serves with it.
 
-The per-transport `ServiceMap`s are written to one package at the output root per language. In Go it is 
-`servicemaps/servicemaps.go`, package `servicemaps`, exporting one `mesh.ServiceMap` var per transport named by 
-PascalCasing the transport string, such as `servicemaps.Nats`. In Ruby it is `service_maps.rb`, defining 
-`ServiceMaps::<TRANSPORT>` with the transport string in SCREAMING_SNAKE_CASE, such as `ServiceMaps::NATS`. That package 
+The per-transport `ServiceMaps` are written to one package at the output root per language. In Go it is
+`servicemaps/servicemaps.go`, package `servicemaps`, exporting one `mesh.ServiceMap` var per transport named by
+PascalCasing the transport string, such as `servicemaps.Nats`. In Ruby it is `service_maps.rb`, defining
+`ServiceMaps::<TRANSPORT>` with the transport string in SCREAMING_SNAKE_CASE, such as `ServiceMaps::NATS`. That package
 imports the directory packages for their `Target` values.
 
-### RPCService Types
+#### RPCService Types
 
-For each service defined in a `.proto` file, the generator emits an `RPCService` type, which provides a way for each of that service's 
-`rpc` method handlers to be implemented by application code. It then outputs `Endpoints` and/or `Subscribers` that contain those handlers, 
-and they are what the transport-specific `Runtime` ingests.
+For each service defined in a `.proto` file, the generator emits an `RPCService` type, which provides a way for each of that service's
+`rpc` method handlers to be implemented by application code. It then outputs `Endpoints` and/or `Subscribers` that contain those handlers,
+and they are what the transport-specific `Runtime` accepts alongside the transport's `Client`.
 
 The handlers for `Endpoints` and `Subscribers` differ in their return value:
 
@@ -412,74 +329,85 @@ The handlers for `Endpoints` and `Subscribers` differ in their return value:
 | `ROUTE` | `(context, <RequestType>) -> (<ResponseType>) [May return or raise a MeshError, depending on language/implementation]`   |
 | `TOPIC` | `(context, <RequestType>) [May return or raise a MeshError, depending on language/implementation]`                       |
 
-`<RequestType>` and `<ResponseType>` are the `rpc` method's input and output message classes as produced by the standard `protoc`
-run for that language.
+`<RequestType>` and `<ResponseType>` are the compiled message types for each `rpc` method.
 
-An application implements only the method handlers it intends to serve. Decoding the inbound Service Mesh API `Message` 
-into the proper type, and encoding a response type back into a `Message` is handled automatically so that the 
+An application implements only the method handlers it intends to serve. Decoding the inbound Service Mesh API `Message`
+into the proper type, and encoding a response type back into a `Message` is handled automatically so that the
 application doesn't need to touch the underlying layer.
 
-### RPCClient Types
+An `RPCService` type keeps the name of the service it is generated from, such as `OrderService`. A root file may
+re-export it under a prefixed name, as described under Root Package, and the type itself keeps its name.
+
+#### RPCClient Types
 
 For each service the generator also emits an `RPCClient` type with one method per `rpc` method, through which
-callers reach the service. The `RPCService` type keeps the service name, `ApiKeyService`. The client and targets names 
-are the service name with one trailing `Service` stripped, then `Client` or `Targets` appended: `ApiKeyClient` and 
-`ApiKeyTargets`. A name that would be empty after stripping is kept whole. The method's signature for each client 
-side method mirrors the handler on the service side:
+callers reach the service. These methods have different method signatures based on the `Kind` they are defined
+with.
 
-| kind    | client method signature                   langua                                                                   | Service Mesh API operation |
+| kind    | client method signature                                                                                      | Service Mesh API operation |
 |---------|--------------------------------------------------------------------------------------------------------------|----------------------------|
-| `ROUTE` | `(context, Request) -> (Response) [May return or raise a MeshError, depending on ge/implementation]`   | `Request`                  |
+| `ROUTE` | `(context, Request) -> (Response) [May return or raise a MeshError, depending on language/implementation]`   | `Request`                  |
 | `TOPIC` | `(context, Request) [May return or raise a MeshError, depending on language/implementation]`                 | `Publish`                  |
 
 A `ROUTE` or `TOPIC` method encodes the standard, generated type into a `Message` addressed to the method's `Target` and sends that
-message through the appropriate transport-specific client that implements the Service Mesh API specification. A `ROUTE` 
-method will get a `Message` back and decode it back into the standard, generated response type.
+message through the appropriate transport-specific client that implements the Service Mesh API specification. A `ROUTE`
+method will get a `Message` back and decode it back into the standard, generated response type, then return that type.
 
 An `RPCClient` holds no connection of its own. On each call it must resolve the transport-specific `Client` that
 serves the `Target`'s transport using the `TransportRouter` (described below).
 
-## Non-generated Types
+A client type's name is the service's name with a trailing `Service` removed, if it has one, and `Client` appended:
+`OrderService` gives `OrderClient`. The generated code also holds each service's `Targets` under the same base name
+with `Targets` appended, such as `OrderTargets`; the generated clients and services use them, and applications do not
+need to.
 
-Each language-specific implementation of this specification will need to implement the following types, which are not 
+## Non-Generated Types
+
+Each language-specific implementation of this specification will need to implement the following types, which are not
 generated off of `.proto` files.
 
 ### TransportRouter
 
-The `TransportRouter` holds, for each `transport` name the definitions use, the transport-specific `Client` the 
-application constructed and the constructor of the transport-specific `Runtime`. It is a single, process-wide object the 
-application configures at boot. Generated code for services whose `transport` has no entry fails at runtime. Nothing 
-generated takes the `TransportRouter` as an argument; a generated client is called directly and takes the `Client` for 
-its `Target`'s transport from the process router on each call. The router's Close closes every `Client` it holds, and a 
-process that only calls runs it before exit so the transport flushes what it has buffered. Each language-specific 
-implementation of this specification documents how the `TransportRouter` is configured.
+The `TransportRouter` contains, for each `transport` name the definitions use, the transport-specific `Client` for that transport.
+It is a single, process-wide object, and the application process is responsible for configuring it at boot. Generated
+code for `RPCService` types and `RPCClient` types whose `transport` has no `Client` in the router fails at runtime. Nothing
+generated takes the `TransportRouter` as an argument; a generated client is called directly and takes the `Client` for its
+`Target`'s transport from the process's router on each call. The router's `Close` closes every `Client` it holds, and a
+process that only calls runs it before exit so the transport implementation closes appropriately. Each language-specific
+implementation of this specification documents how the `TransportRouter` is configured, and how clients are
+retrieved from it using the `transport` set for each directory in a definitions project.
 
 ### Registry
 
-The `Registry` is a single, process-wide object that collects every implemented `Endpoint` and `Subscriber` the process 
-will serve. The application registers its implemented `RPCService` values in it at boot, and nothing generated takes the 
-`Registry` as an argument. This specification defines what it does; each language-specific implementation of this 
-specification documents how services are registered.
+The `Registry` is a single, process-wide object that collects every implemented `Endpoint` and `Subscriber` a process
+will serve. The application is responsible for registering its implemented `RPCService` values in it at boot, and nothing
+generated takes the `Registry` as an argument. This specification defines what it does; each language-specific implementation
+of this specification documents how services are registered.
 
 ### RPCRuntime
 
-The `RPCRuntime` is what a service-mesh application calls to begin listening for messages, and it is a wrapper around a 
+The `RPCRuntime` is what a service mesh application calls to begin listening for messages, and it is a wrapper around a
 transport-specific Service Mesh API `Runtime` implementation. It should either wrap or expose the underlying implementation's
 functionality.
 
-An `RPCRuntime` is constructed for a single `transport` and a single `deployment_group`. At construction it asks the 
-`Registry` for the implemented `Endpoints` and `Subscribers` whose `Targets` carry its `deployment_group`, takes the 
-transport's `Client` and `Runtime` constructor from the `TransportRouter`, and builds the transport-specific `Runtime` 
-from that `Client`, its configuration with the `deployment_group` set, and those `Endpoints` and `Subscribers`. The 
-`Runtime` serves over the same connection the process calls through. Nothing else reaches the underlying `Runtime`. 
-`Start`, `Stop`, and `Running` delegate to it, and `Stop` closes the `Client`. Services registered after construction are not served by that `RPCRuntime`. A process holds one 
-`RPCRuntime` per transport.
+An `RPCRuntime` is constructed for a single `transport` and a single `deployment_group`. It accepts a constructor
+function for building the transport-specific `Runtime` and a `Hash<String, String>` configuration object. It takes the
+transport's `Client` from the `TransportRouter`. By default it takes every implemented `Endpoint` and `Subscriber`
+whose `Target` carries its `deployment_group` from the `Registry`, and it also accepts a list of `Endpoints` and a list
+of `Subscribers` in place of those, so a process may serve only part of a deployment group if needed. Each list given
+replaces the `Registry`'s list of that kind, and the other still comes from the `Registry`. Every `Target` in a given
+list carries the `RPCRuntime`'s `deployment_group` and `transport`, and one that does not is an error.
+
+The `Runtime` constructor provided must accept four arguments in this order: the transport's `Client`, a `Hash<String, String>`
+configuration object, a list of `Endpoints`, and a list of `Subscribers`. It returns a Service Mesh API `Runtime` for the given
+`transport` serving those `Endpoints` and `Subscribers`. The `RPCRuntime` passes the `Client` it looks up from the `TransportRouter`,
+the configuration it was given with its `deployment_group` set, and the `Endpoints` and `Subscribers` it serves.
 
 ### MeshError
 
-`MeshError` is the error type every implementation provides for application failures, and the type an `RPCService` 
-handler produces and an `RPCClient` produces when a reply carries one. It wraps the standard `google.rpc.Status` message 
-and adds what the language needs to treat it as an error.
+`MeshError` is the error type every implementation provides for application failures. An `RPCService` handler
+produces one to report a failure, and an `RPCClient` method produces one when the reply carries a failure. It wraps the
+standard `google.rpc.Status` message and adds what the language needs for the calling code to treat it as an error.
 
 | member       | meaning                                                                                  |
 |--------------|------------------------------------------------------------------------------------------|
@@ -488,380 +416,102 @@ and adds what the language needs to treat it as an error.
 | `details`    | the wrapped message's `details`, any number of packed messages of any type               |
 | `proto`      | the wrapped `google.rpc.Status`                                                          |
 
-A `MeshError` is constructed from a code, a message, and zero or more detail messages, or from a 
-`google.rpc.Status` message. It is the language's error type: in Go it implements `Error`, in Ruby it descends from 
-`StandardError`, and so on. Each language-specific implementation documents its language-specific features.
+A `MeshError` is constructed from a code, a message, and zero or more detail messages, or from a
+`google.rpc.Status` message. It is the language's error type: in Go it implements `Error`, in Ruby it descends from
+`StandardError`, and so on. Each language-specific implementation documents its language-specific features and construction.
 
-The compiled classes for `google.rpc.Status`, `google.rpc.Code`, and the detail types in `google/rpc/error_details.proto` 
-are a dependency of each implementation, taken from the standard published packages for the language. Their `.proto` 
-sources are in `github.com/googleapis/googleapis`, which a definitions project whose files import them puts on its 
+The compiled classes for `google.rpc.Status`, `google.rpc.Code`, and the detail types in `google/rpc/error_details.proto`
+are a dependency of each implementation, taken from the standard published packages for the language. Their `.proto`
+sources are in `github.com/googleapis/googleapis`, which a definitions project whose files import them puts on its
 import path with `-I`, as described under Options.
+
+## Encoding and Decoding
+
+The code generated by this specification's generator handles the encoding and decoding of protobuf message types behind
+the scenes. The `rpc` methods generated on `RPCClient` types accept the generated message types themselves and return those
+types, but serialize them into bytes when constructing the Service Mesh API `Message` object that gets passed to the
+transport-specific `Client`. The same happens for `RPCService` type handlers, which are wrapped with logic that deserializes
+the Service Mesh API `Message` into the proper typed generated message, and serializes any replies that are returned.
 
 ## Error Handling
 
-Every call through an `RPCClient` may produce a `MeshError`, the type defined above. Errors from the Service Mesh API 
-and from the transport, such as no receiver for a `Target` or a request timeout, are surfaced to the caller unchanged; 
+Every call through an `RPCClient` may produce a `MeshError`. Errors from the Service Mesh API
+and from the transport, such as no receiver for a `Target` or a request timeout, are surfaced to the caller unchanged;
 this specification does not map them into a `MeshError`.
 
-**Language boundary.** How a handler produces a `MeshError` and how a caller receives one is language-specific,
-because error handling is language-specific. A Go handler returns it as its error value and a Go caller inspects the 
-returned error, while a Ruby handler raises it and a Ruby caller rescues it. Each implementation documents its idiomatic 
-mechanism. Regardless of language, any `MeshError` a handler produces is sent on the transport layer as a `google.rpc.Status`, 
-which is then parsed on the client side and turned back into a `MeshError` to be handled in the idiomatic way for the 
-language of the client side code.
-
-**Reporting.** A `ROUTE` handler reports an application failure by producing a `MeshError` in place of a response, and a 
-language-specific implementation should provide an idiomatic way of doing this. The `RPCService` then sends a reply whose 
-payload is the encoded `google.rpc.Status` and whose metadata carries `Grpc-Status` set to the code as a decimal integer. 
-A `ROUTE` handler that fails in any other way is reported as `UNKNOWN` with the failure's text as the message. A `TOPIC` 
-handler has no caller, so it handles application errors itself; nothing it returns reaches the publisher, and what an 
+**Reporting.** A `ROUTE` handler reports an application failure by producing a `MeshError` in place of a response, and a
+language-specific implementation should provide an idiomatic way of doing this. The `RPCService` then sends a reply whose
+payload is the encoded `google.rpc.Status` and whose metadata carries `Grpc-Status` set to the code as a decimal integer.
+A `ROUTE` handler that fails in any other way is reported as `UNKNOWN` with the failure's text as the message. A `TOPIC`
+handler has no caller, so it handles application errors itself; nothing it returns reaches the publisher, and what an
 implementation does when one fails is documented by that implementation.
 
-**Custom errors.** A consumer may define its own error types as ordinary messages in its definitions and attach them
-to a `MeshError` through `details`, and a language-specific implementation may provide helper functions or other support 
-for doing this. `google/rpc/error_details.proto` provides common detail types such as `ErrorInfo`, `BadRequest`, and 
+**Decoding.** An `RPCClient` reads `Grpc-Status` from the reply metadata before touching the payload. If it is set, it assumes
+the payload is a `google.rpc.Status` and a `MeshError` is produced and surfaced accordingly. If it is not set, it assumes the
+payload is the method's response type and decodes it normally. A payload that does not decode as the expected type produces
+an `INTERNAL` `MeshError`.
+
+**Custom errors.** A consumer may define its own error types as ordinary `.proto` messages in its definitions and attach them
+to a `MeshError` through `details`, and a language-specific implementation may provide helper functions or other support
+for doing this. `google/rpc/error_details.proto` provides common detail types such as `ErrorInfo`, `BadRequest`, and
 `RetryInfo`. Custom errors are defined as protobuf messages so that they can be used across languages.
 
-**Decoding.** An `RPCClient` reads `Grpc-Status` from the reply metadata before touching the payload. If it is set, the 
-payload is a `google.rpc.Status` and a `MeshError` is produced. If it is not set, the payload is the method's response type. A payload that does not decode as
-the expected type produces an `INTERNAL` `MeshError` from the `RPCClient` method.
+## Using the Generator
 
-## Installation
+### Prerequisites
 
-Three pieces are installed: the generator, the library for each language an application is written in, and a 
-transport of the application's choice. The versions below are the current tags.
+| tool | needed for | install |
+|---|---|---|
+| Go 1.26 or newer | installing and running the generator | [go.dev/dl](https://go.dev/dl) |
+| `protoc` 3.15 or newer | every run | macOS: `brew install protobuf`. Linux: `apt install protobuf-compiler` or `dnf install protobuf-compiler`. Any platform, including Windows: unzip `protoc-<version>-<os>.zip` from [protocolbuffers/protobuf releases](https://github.com/protocolbuffers/protobuf/releases) and put its `bin/` on `PATH`. |
+| `protoc-gen-go` | generating Go | `go install google.golang.org/protobuf/cmd/protoc-gen-go@latest` |
 
-### The generator
+Ruby needs no plugin; Ruby support is built into `protoc` itself.
 
-```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.4.0
-```
-
-or, without installing, `go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.4.0` 
-with the same flags. The generator runs `protoc` and, when Go is requested, `protoc-gen-go`, both found on `PATH`:
+### Installing and Running
 
 ```sh
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.6.0
+grpc-service-mesh-gen --definitions definitions --go_out=lib/go --ruby_out=lib/ruby
 ```
 
-### Go
+`go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.6.0` runs it without installing.
+The flags are described under Generation.
+
+Each output directory mirrors the definitions tree. For `definitions/shop/order.proto` the generator writes:
+
+```
+lib/go/shop/order.pb.go             message code
+lib/go/shop/shop.grpcmesh.go        OrderTargets, OrderService, OrderClient
+lib/go/servicemaps/servicemaps.go   one ServiceMap per transport
+lib/ruby/shop/order_pb.rb           message code
+lib/ruby/shop/shop_grpcmesh.rb      Shop::OrderTargets, Shop::OrderService, Shop::OrderClient
+lib/ruby/service_maps.rb            one ServiceMap per transport
+```
+
+### Regenerating
+
+The generator overwrites the files it writes but doesn't delete anything if it becomes orphaned. A project's own automation
+can delete its generated files before each run, so that the output of a renamed or removed `.proto` file does not linger.
+Every generated file begins with a `DO NOT EDIT` header, which makes them easy to find:
 
 ```sh
-go get github.com/Paymentbox-com/grpc-service-mesh-go@v0.8.0
+grep -rl --include='*.go' --include='*.rb' 'DO NOT EDIT' lib | xargs rm -f
+grpc-service-mesh-gen --definitions definitions --go_out=lib/go --ruby_out=lib/ruby
 ```
 
-The library imports `github.com/Paymentbox-com/service-mesh-go/mesh`, `google.golang.org/protobuf`, and 
-`google.golang.org/genproto/googleapis/rpc`, which arrive with it. The module also holds `meshoptions`, the compiled Go 
-form of `mesh/options.proto`. The transport is a separate module the application 
-adds; the NATS transport is `github.com/Paymentbox-com/service-mesh-nats-go`, package `nats`:
+Generated code should be committed, so the applications that use it need neither `protoc` nor the generator at runtime.
 
-```sh
-go get github.com/Paymentbox-com/service-mesh-nats-go@v0.6.0
-```
+## Using a Definitions Project in Service Mesh Applications
 
-### Ruby
+A definitions project is a `definitions/` directory, laid out as described under Definitions Project Structure, plus
+the directories the generated code goes into. It can live inside the repositories of the applications that use it as a
+git submodule, or as its own repository that exposes the generated code as packages or libraries that the applications
+on a service mesh import. Either way, the application will need to include the language-specific library that implements
+this specification at runtime, as the generated code will depend on it. See current implementation libraries below. Each
+implementation will document its own usage and how to integrate it into an application.
 
-The gems `grpc_service_mesh`, `service_mesh`, and `service_mesh_nats` come from their repositories at a tag. 
-`service_mesh` is a dependency of `grpc_service_mesh`, and Bundler needs its git source spelled out in the Gemfile. 
-`googleapis-common-protos-types` comes from rubygems.org and provides `Google::Rpc::Status`, `Google::Rpc::Code`, and 
-the detail types in `google/rpc/error_details.proto`, such as `Google::Rpc::ErrorInfo`.
+## Implementations
 
-```ruby
-# Gemfile
-gem "grpc_service_mesh", git: "https://github.com/Paymentbox-com/grpc-service-mesh-ruby", tag: "v0.7.0"
-gem "service_mesh", git: "https://github.com/Paymentbox-com/service-mesh-ruby", tag: "v0.4.0"
-gem "googleapis-common-protos-types"
-gem "service_mesh_nats", git: "https://github.com/Paymentbox-com/service-mesh-nats-ruby", tag: "v0.5.0"
-```
-
-`service_mesh_nats` is the NATS transport; another transport gem takes its place in an application that uses a 
-different transport.
-
-## Usage
-
-The examples use the `pbx.ApiKeyService` shown under Options, served over the transport named `nats` in the deployment 
-group `pbx`, with `go_package` set to `example.com/definitions/lib/go/pbx`.
-
-### A definitions project
-
-A definitions project is a repository that holds the `.proto` files of a mesh and the code generated from them.
-Applications depend on it for their message types, services, clients, and targets. It contains:
-
-* a `definitions/` directory with one top-level directory per deployment group
-* in each top-level directory, a settings file such as `deployment.proto` that sets `mesh.transport`, optionally
-  `mesh.deployment_group`, and `go_package` when Go is generated, and declares nothing else
-* the `.proto` files of that deployment group, each importing `mesh/options.proto` when it uses a method option, and
-  each setting `go_package` when Go is generated
-* the Go module and the Ruby library that the generated code lives in
-
-The project holds only `definitions/` and the output roots. `mesh/options.proto` comes from the generator's
-specification directory and its compiled forms from the language libraries, as described under Options.
-
-```
-definitions/
-└── pbx/
-    ├── deployment.proto   # option (mesh.transport) = "nats"; option go_package = "example.com/definitions/lib/go/pbx"
-    └── api_key.proto      # package pbx; option go_package = "example.com/definitions/lib/go/pbx"; ApiKeyService
-lib/
-├── go/
-│   └── go.mod             # module example.com/definitions/lib/go
-└── ruby/
-```
-
-#### Where generated code goes
-
-Each language has one output root. `--out <dir>` sets both, as `<dir>/go` and `<dir>/ruby`, and `--go-out` and
-`--ruby-out` set one each. Inside a root, every file lands at the path of its `.proto` file relative to `definitions/`,
-so the output mirrors the definitions tree: `definitions/pbx/api_key.proto` gives `pbx/api_key.pb.go` and
-`pbx/api_key_pb.rb`. The Go root is the directory of the project's `go.mod`, and each directory's `go_package` is the
-module path followed by that directory's path, which is what makes the generated packages importable. The Ruby root is
-the directory an application puts on its load path, or the `lib/` of a gem.
-
-One command generates everything:
-
-```sh
-grpc-service-mesh-gen --definitions definitions --out lib --lang go,ruby
-```
-
-It writes these files:
-
-```
-lib/go/pbx/api_key.pb.go            message code from protoc-gen-go
-lib/go/pbx/deployment.pb.go         protoc-gen-go output for the settings file, in package pbx
-lib/go/pbx/pbx.grpcmesh.go          ApiKeyTargets, ApiKeyService, ApiKeyClient
-lib/go/servicemaps/servicemaps.go   servicemaps.Nats
-lib/ruby/pbx/api_key_pb.rb          message code from protoc
-lib/ruby/pbx/deployment_pb.rb       protoc output for the settings file
-lib/ruby/pbx/pbx_grpcmesh.rb        Pbx::ApiKeyTargets, Pbx::ApiKeyService, Pbx::ApiKeyClient
-lib/ruby/service_maps.rb            ServiceMaps::NATS
-```
-
-The message files and each `<dir>.grpcmesh.go` or `<dir>_grpcmesh.rb` sit together in the directory's package. The
-service maps sit at the root of each language, in `servicemaps/` and `service_maps.rb`, because a transport's map spans
-every directory served over it. With the root options described under Root package, one more file per language sits
-at the root beside them.
-
-The Go message code imports `github.com/Paymentbox-com/grpc-service-mesh-go/meshoptions`, the compiled form of
-`mesh/options.proto`, so `go mod tidy` in `lib/go` records `github.com/Paymentbox-com/grpc-service-mesh-go`,
-`github.com/Paymentbox-com/service-mesh-go`, and `google.golang.org/protobuf` in `go.mod`. The Ruby files are loaded
-with `lib/ruby` on the load path and the `grpc_service_mesh` gem in the bundle, so `require "service_maps"` and
-`require "pbx/pbx_grpcmesh"` resolve, and the `require 'mesh/options_pb'` in each message file resolves from the gem.
-
-#### Regenerating
-
-Every run overwrites each file it writes, and every generated file begins with a `DO NOT EDIT` header. The generator
-writes files and deletes none, so a file generated from a `.proto` that has since been renamed or removed stays in the
-output until the project deletes it. A definitions project deletes its generated files before each run, for example
-every `.go` and `.rb` file under the output roots whose header reads `DO NOT EDIT`, so the output always matches the
-definitions. Generated code is committed, so applications that depend on the project need neither `protoc` nor the
-generator.
-
-#### Definitions inside an application
-
-An application can hold its own definitions. A Rails application keeps `definitions/` at its root and the generated
-Ruby under `lib/proto`, with `grpc_service_mesh` in its Gemfile:
-
-```
-app/
-config/
-├── application.rb
-└── initializers/
-    └── mesh.rb
-definitions/
-└── pbx/
-    ├── deployment.proto
-    └── api_key.proto
-lib/
-└── proto/                 # generated: pbx/api_key_pb.rb, pbx/deployment_pb.rb, pbx/pbx_grpcmesh.rb, service_maps.rb
-Gemfile                    # grpc_service_mesh, service_mesh, googleapis-common-protos-types, a transport gem
-```
-
-```sh
-grpc-service-mesh-gen --definitions definitions --ruby-out lib/proto --lang ruby
-```
-
-```ruby
-# config/application.rb
-config.autoload_lib(ignore: %w[proto])
-$LOAD_PATH.unshift(Rails.root.join("lib/proto").to_s)
-
-# config/initializers/mesh.rb
-require "service_maps"
-```
-
-Zeitwerk, the Rails autoloader, expects each file under an autoloaded directory to define a constant named after the
-file, and protoc's output defines constants its file names do not match, such as `Pbx::ApiKey` in `pbx/api_key_pb.rb`,
-so `lib/proto` is kept out of autoloading and loaded through `require`.
-
-### A Go application
-
-The application builds its transport's `Client` at boot, hands it to the process router with the transport's 
-`Runtime` constructor, one entry per transport name, and registers the services it serves.
-
-```go
-import (
-    "context"
-    "errors"
-    "os"
-    "time"
-
-    "github.com/Paymentbox-com/grpc-service-mesh-go/grpcmesh"
-    "github.com/Paymentbox-com/service-mesh-go/mesh"
-    "github.com/Paymentbox-com/service-mesh-nats-go/nats"
-    "google.golang.org/genproto/googleapis/rpc/code"
-    "google.golang.org/genproto/googleapis/rpc/errdetails"
-    "google.golang.org/protobuf/proto"
-
-    "example.com/definitions/lib/go/pbx"
-    "example.com/definitions/lib/go/servicemaps"
-)
-
-client, err := nats.NewClient(mesh.Config{nats.URLKey: os.Getenv("NATS_URL")}, servicemaps.Nats)
-if err != nil { /* the transport's connect error */ }
-grpcmesh.AddTransport("nats", grpcmesh.Transport{
-    Client: client,
-    Config: mesh.Config{},
-    NewRuntime: func(c mesh.Client, cfg mesh.Config, e []mesh.Endpoint, s []mesh.Subscriber) (mesh.Runtime, error) {
-        return nats.New(c.(*nats.Client), cfg, e, s)
-    },
-})
-```
-
-A generated `RPCService` is a struct with one function field per `rpc` method. The application sets the ones it 
-serves; a nil field is not served. A ROUTE handler returns the response or an error, and a `*grpcmesh.MeshError` is 
-the application failure the caller receives.
-
-```go
-grpcmesh.Register(pbx.ApiKeyService{
-    Search: func(ctx context.Context, req *pbx.ApiKey) (*pbx.ApiKey, error) {
-        key, ok := store.Find(req.GetFirstName())
-        if !ok {
-            return nil, grpcmesh.NewNotFoundError("no such key",
-                &errdetails.ErrorInfo{Reason: "KEY_MISSING", Domain: "pbx"})
-        }
-        return key, nil
-    },
-    Created: func(ctx context.Context, ev *pbx.ApiKey) error {
-        return audit.Record(ev)
-    },
-})
-```
-
-`grpcmesh.NewRPCRuntime(transport, deploymentGroup)` builds the transport's runtime from the registered services of 
-that deployment group. `Start`, `Stop`, and `Running` delegate to it.
-
-```go
-rt, err := grpcmesh.NewRPCRuntime("nats", "pbx")
-if err != nil { /* grpcmesh.ErrUnknownTransport or the transport constructor's error */ }
-if err := rt.Start(ctx); err != nil { /* the transport's error */ }
-
-drain, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-defer cancel()
-_ = rt.Stop(drain)
-```
-
-A generated client is a package-level variable with one method per `rpc` method, called directly. A ROUTE method 
-returns the decoded response or an error; a TOPIC method publishes and returns an error or nil. A `MeshError` the 
-handler produced comes back as a `*grpcmesh.MeshError`, found with `errors.As`.
-
-```go
-key, err := pbx.ApiKeyClient.Search(ctx, &pbx.ApiKey{FirstName: proto.String("ada")})
-
-var me *grpcmesh.MeshError
-switch {
-case err == nil:
-    // key is the response
-case errors.As(err, &me):
-    // me.Code(), me.Message(), me.Details(); a detail unpacks with UnmarshalTo
-    for _, d := range me.Details() {
-        var info errdetails.ErrorInfo
-        if d.UnmarshalTo(&info) == nil {
-            _ = info.GetReason()
-        }
-    }
-default:
-    // a router, Service Mesh API, or transport error, unchanged
-}
-
-err = pbx.ApiKeyClient.Created(ctx, key)
-```
-
-### A Ruby application
-
-The same shape in Ruby. `GrpcServiceMesh.add_transport` takes the transport client the application built, the 
-runtime configuration Hash, and a lambda that builds the transport's `Runtime` from a client.
-
-```ruby
-require "grpc_service_mesh"
-require "service_mesh_nats"
-require "service_maps"
-require "pbx/pbx_grpcmesh"
-
-client = ServiceMeshNats::Client.new({"url" => ENV.fetch("NATS_URL", "nats://127.0.0.1:4222")}, ServiceMaps::NATS)
-GrpcServiceMesh.add_transport("nats",
-  client: client,
-  config: {},
-  runtime: ->(c, cfg, endpoints:, subscribers:) { ServiceMeshNats::Runtime.new(c, cfg, endpoints: endpoints, subscribers: subscribers) })
-```
-
-The generated `Pbx::ApiKeyService` declares the rpcs and serves nothing itself. The application subclasses it and 
-defines a method for each rpc it serves, taking the decoded request and the inbound metadata Hash. A route method 
-returns the response message and raises `GrpcServiceMesh::MeshError` for an application failure; a method the 
-subclass does not define is not served.
-
-```ruby
-class ApiKeys < Pbx::ApiKeyService
-  def initialize(store, audit)
-    @store = store
-    @audit = audit
-  end
-
-  def search(request, metadata)
-    key = @store.find(request.first_name) or
-      raise GrpcServiceMesh::NotFoundError.new("no such key",
-        Google::Rpc::ErrorInfo.new(reason: "KEY_MISSING", domain: "pbx"))
-    Pbx::ApiKey.new(first_name: key.first_name, last_name: key.last_name)
-  end
-
-  def created(request, metadata)
-    @audit.record(request)
-  end
-end
-
-GrpcServiceMesh.register(ApiKeys.new(store, audit))
-
-runtime = GrpcServiceMesh::RPCRuntime.new(transport: "nats", deployment_group: "pbx")
-runtime.start
-at_exit { runtime.stop(10) }
-```
-
-Generated client methods are class methods taking the request and two keywords, `metadata:` for the outbound 
-message's metadata and `options:` for the per-call Hash the transport's `request` or `publish` takes. A route method 
-returns the decoded response and raises the `MeshError` a handler produced; a topic method returns `nil`.
-
-```ruby
-begin
-  key = Pbx::ApiKeyClient.search(Pbx::ApiKey.new(first_name: "ada"),
-    metadata: {"Request-Id" => SecureRandom.uuid},
-    options: {"request_timeout" => "2"})
-rescue GrpcServiceMesh::MeshError => e
-  e.code    # :NOT_FOUND
-  e.message # "no such key"
-  info = e.details.find { |d| d.is(Google::Rpc::ErrorInfo) }&.unpack(Google::Rpc::ErrorInfo)
-end
-
-Pbx::ApiKeyClient.created(key, metadata: {"Event-Id" => "e1"})
-```
-
-Service Mesh API errors and the transport's own errors pass through both clients unchanged.
-
-## Repositories
-
-- [service-mesh-api](https://github.com/Paymentbox-com/service-mesh-api): the Service Mesh API Specification, the transport contract this specification builds on.
-- [service-mesh-go](https://github.com/Paymentbox-com/service-mesh-go): the Go contract, module `github.com/Paymentbox-com/service-mesh-go`, package `mesh`.
-- [service-mesh-nats-go](https://github.com/Paymentbox-com/service-mesh-nats-go): the Go transport over NATS, package `nats`.
-- [service-mesh-ruby](https://github.com/Paymentbox-com/service-mesh-ruby): the Ruby contract, gem `service_mesh`, with the conformance suite transports run.
-- [service-mesh-nats-ruby](https://github.com/Paymentbox-com/service-mesh-nats-ruby): the Ruby transport over NATS, gem `service_mesh_nats`.
-- [grpc-service-mesh-api](https://github.com/Paymentbox-com/grpc-service-mesh-api): this specification and the generator `grpc-service-mesh-gen`.
 - [grpc-service-mesh-go](https://github.com/Paymentbox-com/grpc-service-mesh-go): the Go library, package `grpcmesh`.
 - [grpc-service-mesh-ruby](https://github.com/Paymentbox-com/grpc-service-mesh-ruby): the Ruby library, gem `grpc_service_mesh`.
