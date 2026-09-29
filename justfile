@@ -89,7 +89,7 @@ release:
     git push origin {{version}}
     GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod {{go}} list -m github.com/Paymentbox-com/grpc-service-mesh-api@{{version}}
 
-# Bump the version in VERSION by one patch, minor, or major step: just bump patch
+# Bump the version in VERSION by one patch, minor, or major step and commit that file: just bump patch
 [group('release')]
 bump part:
     #!/usr/bin/env bash
@@ -105,4 +105,5 @@ bump part:
     esac
     next="${major}.${minor}.${patch}"
     echo "v$next" > VERSION
-    echo "v$current -> v$next"
+    git commit -q -m "Release v$next" -- VERSION
+    echo "v$current -> v$next, committed"
