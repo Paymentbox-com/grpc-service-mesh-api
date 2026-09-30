@@ -63,11 +63,10 @@ type File struct {
 // Directory is a directory of the definitions tree that declares at least
 // one service.
 type Directory struct {
-	Path            string // slash-separated, relative to the definitions root
-	Transport       string
-	DeploymentGroup string
-	Files           []File    // every file in the directory, sorted by path
-	Services        []Service // in file order, then declaration order
+	Path      string // slash-separated, relative to the definitions root
+	Transport string
+	Files     []File    // every file in the directory, sorted by path
+	Services  []Service // in file order, then declaration order
 }
 
 // Source is one proto file of the definitions tree whose message code the
@@ -124,9 +123,9 @@ func (m *Model) Transports() []string {
 
 // options is the set of mesh.* extension types found in the descriptor set.
 type options struct {
-	kind, consumerGroup, deploymentGroup, transport, rootPrefix protoreflect.ExtensionType
-	types                                                       *protoregistry.Types
-	files                                                       *protoregistry.Files
+	kind, consumerGroup, transport, rootPrefix protoreflect.ExtensionType
+	types                                      *protoregistry.Types
+	files                                      *protoregistry.Files
 }
 
 func loadOptions(files *protoregistry.Files) (*options, error) {
@@ -142,7 +141,6 @@ func loadOptions(files *protoregistry.Files) (*options, error) {
 	}{
 		{"mesh.kind", &o.kind},
 		{"mesh.consumer_group", &o.consumerGroup},
-		{"mesh.deployment_group", &o.deploymentGroup},
 		{"mesh.transport", &o.transport},
 		{"mesh.root_prefix", &o.rootPrefix},
 	} {
@@ -193,16 +191,14 @@ func (o *options) str(m proto.Message, xt protoreflect.ExtensionType) (string, b
 
 // fileInfo is one file of the set with its option values read.
 type fileInfo struct {
-	desc               protoreflect.FileDescriptor
-	path, dir, top     string
-	transport          string
-	hasTransport       bool
-	deploymentGroup    string
-	hasDeploymentGroup bool
-	rootPrefix         string
-	hasRootPrefix      bool
-	goPackage          string
-	rubyPackage        string
+	desc           protoreflect.FileDescriptor
+	path, dir, top string
+	transport      string
+	hasTransport   bool
+	rootPrefix     string
+	hasRootPrefix  bool
+	goPackage      string
+	rubyPackage    string
 }
 
 // validRootPrefix is the form of a mesh.root_prefix value.
@@ -249,7 +245,6 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 			return nil, fmt.Errorf("%s: %w", fi.path, err)
 		}
 		fi.transport, fi.hasTransport = opts.str(resolved, opts.transport)
-		fi.deploymentGroup, fi.hasDeploymentGroup = opts.str(resolved, opts.deploymentGroup)
 		fi.rootPrefix, fi.hasRootPrefix = opts.str(resolved, opts.rootPrefix)
 		if fi.hasRootPrefix && !validRootPrefix.MatchString(fi.rootPrefix) {
 			errs = append(errs, fmt.Errorf("%s: root_prefix %q is not an identifier; an uppercase ASCII letter followed by ASCII letters and digits is expected", fi.path, fi.rootPrefix))
@@ -290,12 +285,12 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 		active[fi.top] = true
 	}
 	for _, fi := range infos {
-		if fi.dir == "." && (fi.hasTransport || fi.hasDeploymentGroup) {
-			errs = append(errs, fmt.Errorf("%s: transport and deployment_group apply to a top-level directory; a file at the definitions root sets neither", fi.path))
+		if fi.dir == "." && fi.hasTransport {
+			errs = append(errs, fmt.Errorf("%s: transport applies to a top-level directory; a file at the definitions root does not set it", fi.path))
 		}
 	}
 
-	settings := map[string]*Directory{} // top-level path -> transport and deployment group
+	settings := map[string]*Directory{} // top-level path -> transport
 	tops := make([]string, 0, len(active))
 	for top := range active {
 		tops = append(tops, top)
@@ -304,8 +299,6 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 	for _, top := range tops {
 		var transportFiles []string
 		var transport string
-		dgFiles := map[string]string{} // value -> first file setting it
-		var dgValues []string
 		for _, fi := range infos {
 			if fi.top != top {
 				continue
@@ -314,20 +307,11 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 				if fi.hasTransport {
 					errs = append(errs, fmt.Errorf("%s: transport is set in a nested directory; only a file directly in %s/ sets it", fi.path, top))
 				}
-				if fi.hasDeploymentGroup {
-					errs = append(errs, fmt.Errorf("%s: deployment_group is set in a nested directory; only a file directly in %s/ sets it", fi.path, top))
-				}
 				continue
 			}
 			if fi.hasTransport {
 				transportFiles = append(transportFiles, fi.path)
 				transport = fi.transport
-			}
-			if fi.hasDeploymentGroup {
-				if _, seen := dgFiles[fi.deploymentGroup]; !seen {
-					dgFiles[fi.deploymentGroup] = fi.path
-					dgValues = append(dgValues, fi.deploymentGroup)
-				}
 			}
 		}
 		switch len(transportFiles) {
@@ -337,18 +321,7 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 		default:
 			errs = append(errs, fmt.Errorf("%s: transport is set in more than one file: %s", top, strings.Join(transportFiles, ", ")))
 		}
-		if len(dgValues) > 1 {
-			var parts []string
-			for _, v := range dgValues {
-				parts = append(parts, fmt.Sprintf("%q in %s", v, dgFiles[v]))
-			}
-			errs = append(errs, fmt.Errorf("%s: deployment_group is set to different values: %s", top, strings.Join(parts, ", ")))
-		}
-		dg := top
-		if len(dgValues) == 1 {
-			dg = dgValues[0]
-		}
-		settings[top] = &Directory{Transport: transport, DeploymentGroup: dg}
+		settings[top] = &Directory{Transport: transport}
 	}
 
 	// Directories, at any depth, that declare a service.
@@ -397,7 +370,7 @@ func Analyze(set *descriptorpb.FileDescriptorSet) (*Model, error) {
 			continue
 		}
 		top := settings[group[0].top]
-		d := Directory{Path: dir, Transport: top.Transport, DeploymentGroup: top.DeploymentGroup}
+		d := Directory{Path: dir, Transport: top.Transport}
 		for _, fi := range group {
 			d.Files = append(d.Files, File{
 				Path:        fi.path,

@@ -1,4 +1,4 @@
-// Directory-wide settings for the shop deployment group.
+// Directory-wide settings for the shop directory.
 syntax = "proto3";
 
 package shop;

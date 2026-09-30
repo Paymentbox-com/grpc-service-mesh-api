@@ -19,26 +19,6 @@ func TestAnalyze_TransportSetTwice(t *testing.T) {
 	mustContain(t, got, "shop: transport is set in more than one file: shop/a.proto, shop/b.proto")
 }
 
-func TestAnalyze_DeploymentGroupConflict(t *testing.T) {
-	got := analyzeErr(t, map[string]string{
-		"shop/order.proto": shopService,
-		"shop/a.proto":     shopDeployment + "option (mesh.deployment_group) = \"one\";\n",
-		"shop/b.proto":     header + "package shop;\noption (mesh.deployment_group) = \"two\";\n",
-	})
-	mustContain(t, got, `shop: deployment_group is set to different values: "one" in shop/a.proto, "two" in shop/b.proto`)
-}
-
-func TestAnalyze_DeploymentGroupRepeatedWithOneValueIsAllowed(t *testing.T) {
-	m := analyze(t, map[string]string{
-		"shop/order.proto": shopService,
-		"shop/a.proto":     shopDeployment + "option (mesh.deployment_group) = \"one\";\n",
-		"shop/b.proto":     header + "package shop;\noption (mesh.deployment_group) = \"one\";\n",
-	})
-	if m.Directories[0].DeploymentGroup != "one" {
-		t.Fatalf("deployment group %q", m.Directories[0].DeploymentGroup)
-	}
-}
-
 func TestAnalyze_TransportInNestedDirectory(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
 		"shop/order.proto":             shopService,
@@ -46,15 +26,6 @@ func TestAnalyze_TransportInNestedDirectory(t *testing.T) {
 		"shop/internal/settings.proto": header + "package shop.internal;\noption (mesh.transport) = \"http\";\n",
 	})
 	mustContain(t, got, "shop/internal/settings.proto: transport is set in a nested directory; only a file directly in shop/ sets it")
-}
-
-func TestAnalyze_DeploymentGroupInNestedDirectory(t *testing.T) {
-	got := analyzeErr(t, map[string]string{
-		"shop/order.proto":             shopService,
-		"shop/deployment.proto":        shopDeployment,
-		"shop/internal/settings.proto": header + "package shop.internal;\noption (mesh.deployment_group) = \"other\";\n",
-	})
-	mustContain(t, got, "shop/internal/settings.proto: deployment_group is set in a nested directory; only a file directly in shop/ sets it")
 }
 
 func TestAnalyze_StreamingRPC(t *testing.T) {
@@ -86,22 +57,13 @@ func TestAnalyze_ServiceAtDefinitionsRoot(t *testing.T) {
 	mustContain(t, got, "order.proto: a file that declares a service must live in a directory under the definitions root")
 }
 
-func TestAnalyze_DeploymentGroupAtDefinitionsRoot(t *testing.T) {
-	got := analyzeErr(t, map[string]string{
-		"settings.proto":        header + "package root;\noption go_package = \"example.com/definitions/root\";\noption (mesh.deployment_group) = \"orders\";\n",
-		"shop/order.proto":      shopService,
-		"shop/deployment.proto": shopDeployment,
-	})
-	mustContain(t, got, "settings.proto: transport and deployment_group apply to a top-level directory; a file at the definitions root sets neither")
-}
-
 func TestAnalyze_TransportAtDefinitionsRoot(t *testing.T) {
 	got := analyzeErr(t, map[string]string{
 		"deployment.proto":      shopDeployment,
 		"shop/order.proto":      shopService,
 		"shop/deployment.proto": shopDeployment,
 	})
-	mustContain(t, got, "deployment.proto: transport and deployment_group apply to a top-level directory; a file at the definitions root sets neither")
+	mustContain(t, got, "deployment.proto: transport applies to a top-level directory; a file at the definitions root does not set it")
 }
 
 func TestAnalyze_FileWithoutPackage(t *testing.T) {
@@ -148,9 +110,9 @@ service InvoiceService { rpc Get(Invoice) returns (Invoice); }
 	}
 }
 
-func TestAnalyze_NestedDirectoryInheritsTransportAndDeploymentGroup(t *testing.T) {
+func TestAnalyze_NestedDirectoryInheritsTransport(t *testing.T) {
 	m := analyze(t, map[string]string{
-		"shop/deployment.proto": shopDeployment + "option (mesh.deployment_group) = \"shop-prod\";\n",
+		"shop/deployment.proto": shopDeployment,
 		"shop/internal/audit.proto": header + `package shop.internal;
 option go_package = "example.com/definitions/shop/internal";
 message Entry {}
@@ -161,25 +123,8 @@ service AuditService { rpc Record(Entry) returns (Entry); }
 		t.Fatalf("directories %+v", m.Directories)
 	}
 	d := m.Directories[0]
-	if d.Path != "shop/internal" || d.Transport != "nats" || d.DeploymentGroup != "shop-prod" {
+	if d.Path != "shop/internal" || d.Transport != "nats" {
 		t.Fatalf("directory %+v", d)
-	}
-}
-
-func TestAnalyze_DeploymentGroupDefaultsToDirectoryName(t *testing.T) {
-	m := analyze(t, map[string]string{"shop/order.proto": shopService, "shop/deployment.proto": shopDeployment})
-	if m.Directories[0].DeploymentGroup != "shop" {
-		t.Fatalf("deployment group %q", m.Directories[0].DeploymentGroup)
-	}
-}
-
-func TestAnalyze_DeploymentGroupOverride(t *testing.T) {
-	m := analyze(t, map[string]string{
-		"shop/order.proto":      shopService,
-		"shop/deployment.proto": shopDeployment + "option (mesh.deployment_group) = \"payments\";\n",
-	})
-	if m.Directories[0].DeploymentGroup != "payments" {
-		t.Fatalf("deployment group %q", m.Directories[0].DeploymentGroup)
 	}
 }
 

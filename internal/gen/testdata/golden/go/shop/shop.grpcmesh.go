@@ -18,17 +18,14 @@ var OrderTargets = struct {
 		Segments: []string{"shop", "OrderService", "Place"},
 		Kind:     mesh.KindRoute,
 		Metadata: map[string]string{
-			"deployment_group": "shop",
-			"transport":        "nats",
+			"transport": "nats",
 		},
 	},
 	Placed: mesh.Target{
 		Segments: []string{"shop", "OrderService", "Placed"},
 		Kind:     mesh.KindTopic,
 		Metadata: map[string]string{
-			"deployment_group": "shop",
-			"transport":        "nats",
-			"consumer_group":   "audit",
+			"transport": "nats",
 		},
 	},
 }
@@ -44,7 +41,7 @@ type OrderService struct {
 func (s OrderService) Endpoints() []mesh.Endpoint {
 	var out []mesh.Endpoint
 	if s.Place != nil {
-		out = append(out, grpcmesh.NewEndpoint(OrderTargets.Place, s.Place))
+		out = append(out, grpcmesh.NewEndpoint(OrderTargets.Place, "", s.Place))
 	}
 	return out
 }
@@ -53,7 +50,7 @@ func (s OrderService) Endpoints() []mesh.Endpoint {
 func (s OrderService) Subscribers() []mesh.Subscriber {
 	var out []mesh.Subscriber
 	if s.Placed != nil {
-		out = append(out, grpcmesh.NewSubscriber(OrderTargets.Placed, s.Placed))
+		out = append(out, grpcmesh.NewSubscriber(OrderTargets.Placed, "audit", s.Placed))
 	}
 	return out
 }

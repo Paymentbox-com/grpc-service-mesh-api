@@ -17,15 +17,13 @@ enum Kind {
 extend google.protobuf.MethodOptions {
   // Absent means ROUTE.
   Kind kind = 50001;
-  // Consumer group for the binding generated from this method. Absent means
-  // the deployment group.
+  // Consumer group of the endpoint or subscriber generated from this method.
+  // Absent means the deployment group of the runtime that serves it. An
+  // application can override it when it registers the service.
   string consumer_group = 50002;
 }
 
 extend google.protobuf.FileOptions {
-  // Overrides the deployment group name for the file's top-level directory.
-  // Absent means the directory name.
-  string deployment_group = 50003;
   // Names the transport the file's top-level directory is served over.
   // Exactly one file per top-level directory sets it.
   string transport = 50004;

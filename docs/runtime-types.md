@@ -22,6 +22,18 @@ will serve. The application is responsible for registering its implemented `RPCS
 generated takes the `Registry` as an argument. This specification defines what it does; each language-specific implementation
 of this specification documents how services are registered.
 
+Registering a service can override the `consumer_group` of any of its `Endpoints` and `Subscribers`, by `Target`. The
+override replaces the `consumer_group` the generated code carries from the method's option. An override of `""` removes
+it, so the runtime's `deployment_group` applies, and `none` means no group. When one `Target` is given more than once,
+the last value wins. A `Target` that is not one of the service's own is a mistake, and registering fails at boot: an
+implementation panics or raises, as it documents.
+
+A `consumer_group` is resolved from, in order:
+
+1. The override given when the service was registered.
+2. The `consumer_group` option on the method in the definitions.
+3. The `deployment_group` of the `RPCRuntime` that serves it.
+
 ## RPCRuntime
 
 The `RPCRuntime` is what a service mesh application calls to begin listening for messages, and it is a wrapper around a
@@ -30,11 +42,14 @@ functionality.
 
 An `RPCRuntime` is constructed for a single `transport` and a single `deployment_group`. It accepts a constructor
 function for building the transport-specific `Runtime` and a `Hash<String, String>` configuration object. It takes the
-transport's `Client` from the `TransportRouter`. By default it takes every implemented `Endpoint` and `Subscriber`
-whose `Target` carries its `deployment_group` from the `Registry`, and it also accepts a list of `Endpoints` and a list
-of `Subscribers` in place of those, so a process may serve only part of a deployment group if needed. Each list given
-replaces the `Registry`'s list of that kind, and the other still comes from the `Registry`. Every `Target` in a given
-list carries the `RPCRuntime`'s `deployment_group` and `transport`, and one that does not is an error.
+transport's `Client` from the `TransportRouter`, and every `Endpoint` and `Subscriber` in the `Registry` whose `Target`'s
+`transport` is its own. The others are left for the `RPCRuntime` of their own transport, so a process registers everything
+it serves at boot, whatever the transport. The `deployment_group` is the `RPCRuntime`'s own configuration, and nothing in
+the definitions or the `Registry` narrows it.
+
+A process has one `Registry` and one `RPCRuntime` per transport it serves, all under the process's `deployment_group`.
+A registered service whose transport has no `RPCRuntime` in the process is not served. Each `ROUTE` service is served by
+one deployment group, because two groups serving one `ROUTE` method would both reply.
 
 The `Runtime` constructor provided must accept four arguments in this order: the transport's `Client`, a `Hash<String, String>`
 configuration object, a list of `Endpoints`, and a list of `Subscribers`. It returns a Service Mesh API `Runtime` for the given

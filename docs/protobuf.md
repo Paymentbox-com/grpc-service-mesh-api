@@ -25,7 +25,7 @@ Protobuf services defined in `.proto` files have their `rpc` methods translated 
 services themselves are compiled into both an `RPCClient` type and an `RPCService` type.
 
 The `Targets` of every service are compiled into one `ServiceMap` per `transport`, holding a `Target` for every `rpc`
-method served over that transport across all deployment groups.
+method served over that transport.
 
 An `RPCClient` type holds a client method for each `rpc` method in the proto definition, and an `RPCService` either
 accepts or stubs out a handler for each `rpc` method in the proto definition. Each handler is either an `Endpoint` or a

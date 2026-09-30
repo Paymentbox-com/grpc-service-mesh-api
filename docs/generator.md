@@ -53,9 +53,8 @@ The generator stops with an error when:
 * the definitions tree declares no `service`.
 * a `.proto` file declares no `package`.
 * a top-level directory with a `service` sets `transport` in no file or in more than one.
-* a top-level directory sets `deployment_group` to two different values.
-* a nested directory sets `transport` or `deployment_group`.
-* a file at the definitions root declares a `service` or sets `transport` or `deployment_group`.
+* a nested directory sets `transport`.
+* a file at the definitions root declares a `service` or sets `transport`.
 * an `rpc` method uses `stream` on its request or its response.
 * Go is requested and a file sets no `go_package`, which `protoc-gen-go` requires.
 * two files in one directory set different `go_package` values; the directory's mesh file lives in one package.

@@ -64,7 +64,7 @@ func RubyFile(d Directory) (string, []byte, error) {
 	for _, f := range d.SourceFiles() {
 		fmt.Fprintf(&b, "# source: %s\n", f)
 	}
-	fmt.Fprintf(&b, "# transport: %s\n# deployment group: %s\n\n", d.Transport, d.DeploymentGroup)
+	fmt.Fprintf(&b, "# transport: %s\n\n", d.Transport)
 	b.WriteString("require \"grpc_service_mesh\"\n")
 	for _, r := range external {
 		b.WriteString(r + "\n")
@@ -124,13 +124,7 @@ func rubyService(b *bytes.Buffer, indent string, d Directory, s Service) {
 		for _, seg := range append(append([]string{}, segments...), m.Name) {
 			segs = append(segs, rubyString(seg))
 		}
-		md := []string{
-			fmt.Sprintf("\"deployment_group\" => %s", rubyString(d.DeploymentGroup)),
-			fmt.Sprintf("\"transport\" => %s", rubyString(d.Transport)),
-		}
-		if m.ConsumerGroup != "" {
-			md = append(md, fmt.Sprintf("\"consumer_group\" => %s", rubyString(m.ConsumerGroup)))
-		}
+		md := []string{fmt.Sprintf("\"transport\" => %s", rubyString(d.Transport))}
 		fmt.Fprintf(b, "%s  %s = ServiceMesh::Target.new(\n", indent, ScreamingSnake(SnakeCase(m.Name)))
 		fmt.Fprintf(b, "%s    segments: [%s],\n", indent, strings.Join(segs, ", "))
 		fmt.Fprintf(b, "%s    kind: %s,\n", indent, rubyKind(m.Kind))
@@ -149,7 +143,11 @@ func rubyService(b *bytes.Buffer, indent string, d Directory, s Service) {
 			if m.Kind == Route {
 				fmt.Fprintf(b, ", output: %s", rubyMessageName(m.Output))
 			}
-			fmt.Fprintf(b, ", kind: %s\n", rubyKind(m.Kind))
+			fmt.Fprintf(b, ", kind: %s", rubyKind(m.Kind))
+			if cls.name == service && m.ConsumerGroup != "" {
+				fmt.Fprintf(b, ", consumer_group: %s", rubyString(m.ConsumerGroup))
+			}
+			b.WriteString("\n")
 		}
 		fmt.Fprintf(b, "%send\n", indent)
 	}

@@ -195,11 +195,7 @@ func goService(b *bytes.Buffer, im *goImports, d Directory, s Service) error {
 		fmt.Fprintf(b, "\t\tSegments: []string{%s},\n", strings.Join(segs, ", "))
 		fmt.Fprintf(b, "\t\tKind: %s,\n", goKind(m.Kind))
 		b.WriteString("\t\tMetadata: map[string]string{\n")
-		fmt.Fprintf(b, "\t\t\t\"deployment_group\": %s,\n", strconv.Quote(d.DeploymentGroup))
 		fmt.Fprintf(b, "\t\t\t\"transport\": %s,\n", strconv.Quote(d.Transport))
-		if m.ConsumerGroup != "" {
-			fmt.Fprintf(b, "\t\t\t\"consumer_group\": %s,\n", strconv.Quote(m.ConsumerGroup))
-		}
 		b.WriteString("\t\t},\n\t},\n")
 	}
 	b.WriteString("}\n")
@@ -219,7 +215,7 @@ func goService(b *bytes.Buffer, im *goImports, d Directory, s Service) error {
 	fmt.Fprintf(b, "func (s %s) Endpoints() []mesh.Endpoint {\n\tvar out []mesh.Endpoint\n", s.Name)
 	for _, m := range s.Methods {
 		if m.Kind == Route {
-			fmt.Fprintf(b, "\tif s.%s != nil {\n\t\tout = append(out, grpcmesh.NewEndpoint(%s.%s, s.%s))\n\t}\n", m.Name, targets, m.Name, m.Name)
+			fmt.Fprintf(b, "\tif s.%s != nil {\n\t\tout = append(out, grpcmesh.NewEndpoint(%s.%s, %s, s.%s))\n\t}\n", m.Name, targets, m.Name, strconv.Quote(m.ConsumerGroup), m.Name)
 		}
 	}
 	b.WriteString("\treturn out\n}\n")
@@ -228,7 +224,7 @@ func goService(b *bytes.Buffer, im *goImports, d Directory, s Service) error {
 	fmt.Fprintf(b, "func (s %s) Subscribers() []mesh.Subscriber {\n\tvar out []mesh.Subscriber\n", s.Name)
 	for _, m := range s.Methods {
 		if m.Kind == Topic {
-			fmt.Fprintf(b, "\tif s.%s != nil {\n\t\tout = append(out, grpcmesh.NewSubscriber(%s.%s, s.%s))\n\t}\n", m.Name, targets, m.Name, m.Name)
+			fmt.Fprintf(b, "\tif s.%s != nil {\n\t\tout = append(out, grpcmesh.NewSubscriber(%s.%s, %s, s.%s))\n\t}\n", m.Name, targets, m.Name, strconv.Quote(m.ConsumerGroup), m.Name)
 		}
 	}
 	b.WriteString("\treturn out\n}\n")

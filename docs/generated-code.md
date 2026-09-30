@@ -9,7 +9,7 @@ Each `rpc` method becomes one Service Mesh API `Target`, and how the attributes 
 |------------|-----------------------------------------------------------------------|
 | `segments` | the proto package split on `.`, then the service name, then the method name |
 | `kind`     | `route` for `ROUTE`, `topic` for `TOPIC`                              |
-| `metadata` | `deployment_group` from the directory's option or its name, `transport` from the directory's option, and `consumer_group` from the method's option when set |
+| `metadata` | `transport` from the directory's option. A `Target` is an address, so it carries no `deployment_group` or `consumer_group`. |
 
 For the `OrderService` shown under [Options](options.md), in `examples/shop/` with `transport = "nats"`, the two `Targets` would be:
 
@@ -17,7 +17,7 @@ For the `OrderService` shown under [Options](options.md), in `examples/shop/` wi
 |------------|------------------------------------------------|-----------------------------------------------------------------------|
 | `segments` | `["shop", "OrderService", "Place"]`            | `["shop", "OrderService", "Placed"]`                                  |
 | `kind`     | `route`                                        | `topic`                                                               |
-| `metadata` | `deployment_group=shop`, `transport=nats`      | `deployment_group=shop`, `transport=nats`, `consumer_group=audit`     |
+| `metadata` | `transport=nats`                               | `transport=nats`                                                      |
 
 `Targets` are built at generation time and emitted as constants. Nothing reads options at runtime.
 
@@ -47,6 +47,10 @@ The handlers for `Endpoints` and `Subscribers` differ in their return value:
 | `TOPIC` | `(context, <RequestType>) [May return or raise a MeshError, depending on language/implementation]`                       |
 
 `<RequestType>` and `<ResponseType>` are the compiled message types for each `rpc` method.
+
+Each generated `Endpoint` or `Subscriber` carries the method's `consumer_group` option in its metadata when the option
+is set, such as `consumer_group=audit` for `Placed`. An application can override it when it registers the service, as
+described under [Registry](runtime-types.md#registry), and without either, the runtime's `deployment_group` applies.
 
 An application implements only the method handlers it intends to serve. Decoding the inbound Service Mesh API `Message`
 into the proper type, and encoding a response type back into a `Message` is handled automatically so that the
