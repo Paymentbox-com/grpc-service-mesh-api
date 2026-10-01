@@ -22,6 +22,8 @@ definitions project.
 
 Usage:
   grpc-service-mesh-gen --definitions <dir> [--go_out=<dir>] [--ruby_out=<dir>] [-I <dir>] [--mesh-only] [--verbose]
+  grpc-service-mesh-gen --definitions <dir> --go_out=<dir> --ruby_out=<dir> \
+      --go-root-package <import path[;name]> [--go-root-out=<dir>] --ruby-root-module <Module>
   grpc-service-mesh-gen proto-path
 
 At least one of --go_out and --ruby_out is given.
@@ -87,6 +89,10 @@ Flags:
       unique across the tree, and no directory package may share the root
       package's name.
       Needs --go_out.
+  --go-root-out=<dir>, --go-root-out <dir>
+      Write the --go-root-package file into <dir> instead of the --go_out
+      directory, such as the module root when --go_out is a subdirectory.
+      Needs --go-root-package.
   --ruby-root-module <Module>
       Also write <snake_case(Module)>_grpcmesh.rb in the --ruby_out
       directory, requiring every generated Ruby file and defining module <Module> with a constant for
@@ -128,6 +134,7 @@ func run(args []string, stdout, stderr io.Writer, spec func() (string, error)) i
 	goOut := fs.String("go_out", "", "")
 	rubyOut := fs.String("ruby_out", "", "")
 	goRoot := fs.String("go-root-package", "", "")
+	goRootOut := fs.String("go-root-out", "", "")
 	rubyRoot := fs.String("ruby-root-module", "", "")
 	var include includes
 	fs.Var(&include, "I", "")
@@ -166,6 +173,9 @@ func run(args []string, stdout, stderr io.Writer, spec func() (string, error)) i
 	if *goRoot != "" && *goOut == "" {
 		return usage("--go-root-package applies to Go, which needs --go_out")
 	}
+	if *goRootOut != "" && *goRoot == "" {
+		return usage("--go-root-out places the root package file, which needs --go-root-package")
+	}
 	if *rubyRoot != "" && *rubyOut == "" {
 		return usage("--ruby-root-module applies to Ruby, which needs --ruby_out")
 	}
@@ -192,7 +202,11 @@ func run(args []string, stdout, stderr io.Writer, spec func() (string, error)) i
 		log = stdout
 	}
 	r.Verbose = log
-	written, err := generate(r, roots, opts, *meshOnly, specErr)
+	rootDirs := map[gen.Lang]string{}
+	if *goRootOut != "" {
+		rootDirs[gen.Go] = *goRootOut
+	}
+	written, err := generate(r, roots, rootDirs, opts, *meshOnly, specErr)
 	if err != nil {
 		say(stderr, "grpc-service-mesh-gen: %s\n", err)
 		return 1
@@ -237,9 +251,10 @@ func say(w io.Writer, format string, args ...any) {
 
 // generate checks the include paths, then runs the descriptor-set protoc run,
 // the mesh generator, and, unless meshOnly, the message runs, and writes the
-// generated files. specErr is why the specification directory is not on the
+// generated files, each root file under rootDirs when it has the file's
+// language. specErr is why the specification directory is not on the
 // include path, when it is not.
-func generate(r *protoc.Runner, roots map[gen.Lang]string, opts gen.Options, meshOnly bool, specErr error) ([]string, error) {
+func generate(r *protoc.Runner, roots, rootDirs map[gen.Lang]string, opts gen.Options, meshOnly bool, specErr error) ([]string, error) {
 	files, err := protoc.FindProtos(r.Definitions)
 	if err != nil {
 		return nil, err
@@ -278,7 +293,7 @@ func generate(r *protoc.Runner, roots map[gen.Lang]string, opts gen.Options, mes
 			}
 		}
 	}
-	return gen.Write(roots, outs)
+	return gen.Write(roots, rootDirs, outs)
 }
 
 // descriptorSet runs the descriptor-set protoc run into a temporary file and

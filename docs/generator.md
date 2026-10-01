@@ -4,7 +4,7 @@
 The generator is the Go program `grpc-service-mesh-gen` in this repository:
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.9.0
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.10.0
 grpc-service-mesh-gen --definitions definitions --go_out=lib/go --ruby_out=lib/ruby
 ```
 
@@ -21,6 +21,7 @@ the language library and the Service Mesh API contract, and never on a transport
 | `-I <dir>` | an extra import directory, repeatable; also spelled `--proto_path` |
 | `--mesh-only` | write only the mesh code and skip the message code |
 | `--go-root-package <path[;name]>`, `--ruby-root-module <Module>` | add a root file, described under [Root Package](generated-code.md#root-package) |
+| `--go-root-out=<dir>` | the directory of the Go root file, when it is not the `--go_out` directory |
 | `--verbose` | print each `protoc` command and each file written |
 
 ## Import Path
@@ -80,11 +81,11 @@ Ruby needs no plugin; Ruby support is built into `protoc` itself.
 ### Installing and Running
 
 ```sh
-go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.9.0
+go install github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.10.0
 grpc-service-mesh-gen --definitions definitions --go_out=lib/go --ruby_out=lib/ruby
 ```
 
-`go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.9.0` runs it without installing.
+`go run github.com/Paymentbox-com/grpc-service-mesh-api/cmd/grpc-service-mesh-gen@v0.10.0` runs it without installing.
 The flags are described at the [top of this page](#generator).
 
 Each output directory mirrors the definitions tree. For `definitions/shop/order.proto` the generator writes:

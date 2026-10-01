@@ -45,7 +45,7 @@ func TestGolden_ExamplesShop(t *testing.T) {
 		if err := os.RemoveAll(golden); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := Write(map[Lang]string{Go: filepath.Join(golden, "go"), Ruby: filepath.Join(golden, "ruby")}, rooted); err != nil {
+		if _, err := Write(map[Lang]string{Go: filepath.Join(golden, "go"), Ruby: filepath.Join(golden, "ruby")}, nil, rooted); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -113,6 +113,22 @@ lib/go/definitions.grpcmesh.go      type Order = shop.Order, var OrderClient = s
 lib/ruby/definitions_grpcmesh.rb    Definitions::Order = ::Shop::Order, Definitions::OrderClient = ::Shop::OrderClient, ...
 ```
 
+The Go root file goes in the `--go_out` directory unless `--go-root-out=<dir>` names another. A module that keeps its
+generated packages under a subdirectory and its root package at the module root generates into the subdirectory and
+writes the root file at the root:
+
+```sh
+grpc-service-mesh-gen --definitions definitions --go_out=gen --go-root-out=. \
+    --go-root-package "example.com/definitions;definitions"
+```
+
+```
+gen/shop/order.pb.go                package shop, imported as example.com/definitions/gen/shop
+definitions.grpcmesh.go             package definitions, imported as example.com/definitions
+```
+
+Each `go_package` names the subdirectory, as in `option go_package = "example.com/definitions/gen/shop";`.
+
 A re-exported name is the name its directory's package gives it, so two directories that generate the same name
 collide and the generator stops with an error. `option (mesh.root_prefix)`, set in one file of a directory, prepends a
 prefix to every name that directory adds to the root files, and the directory's own package keeps its names. With

@@ -3,6 +3,7 @@ package gen
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -57,19 +58,18 @@ func TestRender_RootFilesAtEachLanguageRoot(t *testing.T) {
 	}
 	var got []string
 	for _, o := range outs {
-		got = append(got, string(o.Lang)+"/"+o.Path)
+		p := string(o.Lang) + "/" + o.Path
+		if o.Root {
+			p += " (root)"
+		}
+		got = append(got, p)
 	}
 	want := []string{
-		"go/shop/shop.grpcmesh.go", "go/servicemaps/servicemaps.go", "go/definitions.grpcmesh.go",
-		"ruby/shop/shop_grpcmesh.rb", "ruby/service_maps.rb", "ruby/definitions_grpcmesh.rb",
+		"go/shop/shop.grpcmesh.go", "go/servicemaps/servicemaps.go", "go/definitions.grpcmesh.go (root)",
+		"ruby/shop/shop_grpcmesh.rb", "ruby/service_maps.rb", "ruby/definitions_grpcmesh.rb (root)",
 	}
-	if len(got) != len(want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("outputs %v", got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("outputs %v", got)
-		}
 	}
 }
 
@@ -116,7 +116,7 @@ func TestRender_RubyDoesNotNeedGoPackage(t *testing.T) {
 func TestWrite_PutsFilesUnderEachLanguageRoot(t *testing.T) {
 	out := t.TempDir()
 	roots := map[Lang]string{Go: filepath.Join(out, "golang"), Ruby: filepath.Join(out, "rb")}
-	paths, err := Write(roots, []Output{
+	paths, err := Write(roots, nil, []Output{
 		{Lang: Ruby, Path: "service_maps.rb", Content: []byte("ruby")},
 		{Lang: Go, Path: "shop/shop.grpcmesh.go", Content: []byte("go")},
 	})
@@ -129,6 +129,27 @@ func TestWrite_PutsFilesUnderEachLanguageRoot(t *testing.T) {
 	b, err := os.ReadFile(paths[1])
 	if err != nil || string(b) != "go" {
 		t.Fatalf("content %q, %v", b, err)
+	}
+}
+
+func TestWrite_PutsRootFilesUnderTheRootDirectory(t *testing.T) {
+	out := t.TempDir()
+	roots := map[Lang]string{Go: filepath.Join(out, "gen"), Ruby: filepath.Join(out, "rb")}
+	paths, err := Write(roots, map[Lang]string{Go: out}, []Output{
+		{Lang: Go, Path: "shop/shop.grpcmesh.go", Content: []byte("go")},
+		{Lang: Go, Path: "definitions.grpcmesh.go", Content: []byte("root"), Root: true},
+		{Lang: Ruby, Path: "definitions_grpcmesh.rb", Content: []byte("ruby root"), Root: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		filepath.Join(out, "gen", "shop", "shop.grpcmesh.go"),
+		filepath.Join(out, "definitions.grpcmesh.go"),
+		filepath.Join(out, "rb", "definitions_grpcmesh.rb"),
+	}
+	if !slices.Equal(paths, want) {
+		t.Fatalf("paths %v, want %v", paths, want)
 	}
 }
 

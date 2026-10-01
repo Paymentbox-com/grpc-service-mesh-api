@@ -21,11 +21,13 @@ const (
 )
 
 // Output is one generated file. Path is relative to the language's output
-// root, such as shop/shop.grpcmesh.go.
+// root, such as shop/shop.grpcmesh.go. Root marks a root file, the one
+// GoRootPackage or RubyRootModule selects.
 type Output struct {
 	Lang    Lang
 	Path    string
 	Content []byte
+	Root    bool
 }
 
 // Options selects what Render emits.
@@ -56,23 +58,27 @@ func Render(m *Model, o Options) ([]Output, error) {
 		if lang == Go {
 			file, maps = GoFile, GoServiceMaps
 		}
-		var emitters []func() (string, []byte, error)
-		for _, d := range m.Directories {
-			emitters = append(emitters, func() (string, []byte, error) { return file(d) })
+		type emitter struct {
+			emit func() (string, []byte, error)
+			root bool
 		}
-		emitters = append(emitters, func() (string, []byte, error) { return maps(m) })
+		var emitters []emitter
+		for _, d := range m.Directories {
+			emitters = append(emitters, emitter{emit: func() (string, []byte, error) { return file(d) }})
+		}
+		emitters = append(emitters, emitter{emit: func() (string, []byte, error) { return maps(m) }})
 		switch {
 		case lang == Go && o.GoRootPackage != "":
-			emitters = append(emitters, func() (string, []byte, error) { return GoRoot(m, o.GoRootPackage) })
+			emitters = append(emitters, emitter{emit: func() (string, []byte, error) { return GoRoot(m, o.GoRootPackage) }, root: true})
 		case lang == Ruby && o.RubyRootModule != "":
-			emitters = append(emitters, func() (string, []byte, error) { return RubyRoot(m, o.RubyRootModule) })
+			emitters = append(emitters, emitter{emit: func() (string, []byte, error) { return RubyRoot(m, o.RubyRootModule) }, root: true})
 		}
-		for _, emit := range emitters {
-			p, content, err := emit()
+		for _, e := range emitters {
+			p, content, err := e.emit()
 			if err != nil {
 				return nil, err
 			}
-			outs = append(outs, Output{Lang: lang, Path: p, Content: content})
+			outs = append(outs, Output{Lang: lang, Path: p, Content: content, Root: e.root})
 		}
 	}
 	return outs, nil
@@ -91,12 +97,17 @@ func ReadSet(file string) (*descriptorpb.FileDescriptorSet, error) {
 	return set, nil
 }
 
-// Write puts each output under roots[lang]/<path> and returns the paths it
-// wrote, in order.
-func Write(roots map[Lang]string, outs []Output) ([]string, error) {
+// Write puts each output under roots[lang]/<path>, or a root file under
+// rootDirs[lang]/<path> when rootDirs has that language, and returns the
+// paths it wrote, in order.
+func Write(roots, rootDirs map[Lang]string, outs []Output) ([]string, error) {
 	var paths []string
 	for _, o := range outs {
-		p := filepath.Join(roots[o.Lang], filepath.FromSlash(o.Path))
+		dir := roots[o.Lang]
+		if d, ok := rootDirs[o.Lang]; ok && o.Root {
+			dir = d
+		}
+		p := filepath.Join(dir, filepath.FromSlash(o.Path))
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			return nil, err
 		}

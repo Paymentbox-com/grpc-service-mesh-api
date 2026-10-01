@@ -48,7 +48,7 @@ func TestRun_Help(t *testing.T) {
 	code, _, stderr := invoke(t, "--help")
 	if code != 0 || !strings.Contains(stderr, "--definitions <dir>") ||
 		!strings.Contains(stderr, "--go_out=<dir>, --go_out <dir>") || !strings.Contains(stderr, "--ruby_out=<dir>, --ruby_out <dir>") ||
-		!strings.Contains(stderr, "--go-root-package <import path[;name]>") || !strings.Contains(stderr, "--ruby-root-module <Module>") ||
+		!strings.Contains(stderr, "--go-root-package <import path[;name]>") || !strings.Contains(stderr, "--go-root-out=<dir>, --go-root-out <dir>") || !strings.Contains(stderr, "--ruby-root-module <Module>") ||
 		!strings.Contains(stderr, "-I <dir>, --proto_path <dir>, --proto_path=<dir>") || !strings.Contains(stderr, "--verbose") ||
 		!strings.Contains(stderr, "--mesh-only") || !strings.Contains(stderr, "  proto-path\n") {
 		t.Fatalf("code %d, help:\n%s", code, stderr)
@@ -170,6 +170,27 @@ func TestRun_RootFilesWrittenAtTheOutputDirectories(t *testing.T) {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("%v", err)
 		}
+	}
+}
+
+func TestRun_GoRootOutPlacesTheGoRootFile(t *testing.T) {
+	parent := t.TempDir()
+	goOut := filepath.Join(parent, "gen")
+	code, _, stderr := invoke(t, "--definitions", examples, "--go_out="+goOut, "--go-root-out="+parent,
+		"--go-root-package", "example.com/definitions;definitions")
+	if code != 0 {
+		t.Fatalf("code %d, stderr %q", code, stderr)
+	}
+	want := []string{"definitions.grpcmesh.go", "gen/servicemaps/servicemaps.go", "gen/shop/deployment.pb.go", "gen/shop/order.pb.go", "gen/shop/shop.grpcmesh.go"}
+	if got := files(t, parent); !slices.Equal(got, want) {
+		t.Fatalf("wrote %v, want %v", got, want)
+	}
+}
+
+func TestRun_GoRootOutWithoutRootPackageIsAUsageError(t *testing.T) {
+	code, _, stderr := invoke(t, "--definitions", examples, "--go_out="+t.TempDir(), "--go-root-out="+t.TempDir())
+	if code != 2 || stderr != "grpc-service-mesh-gen: --go-root-out places the root package file, which needs --go-root-package (see --help)\n" {
+		t.Fatalf("code %d, stderr %q", code, stderr)
 	}
 }
 

@@ -8,7 +8,7 @@
 //
 //	grpc-service-mesh-gen --definitions <dir> [--go_out=<dir>] [--ruby_out=<dir>] [-I <dir>] [--mesh-only] [--verbose]
 //	grpc-service-mesh-gen --definitions <dir> --go_out=<dir> --ruby_out=<dir> \
-//	    --go-root-package <import path[;name]> --ruby-root-module <Module>
+//	    --go-root-package <import path[;name]> [--go-root-out=<dir>] --ruby-root-module <Module>
 //	grpc-service-mesh-gen proto-path
 //
 // At least one of --go_out and --ruby_out is given. For example:
@@ -66,6 +66,11 @@
 // directory's option (mesh.root_prefix) is prepended to every identifier it
 // adds. Every aliased identifier is unique across the tree, and no directory
 // package shares the root package's name. Needs --go_out.
+//
+// --go-root-out=<dir>, also spelled --go-root-out <dir>, writes the
+// --go-root-package file into <dir> instead of the --go_out directory, such
+// as the module root when --go_out is a subdirectory. Needs
+// --go-root-package.
 //
 // --ruby-root-module <Module> also writes <snake_case(Module)>_grpcmesh.rb in
 // the --ruby_out directory, which requires every generated Ruby file and defines module <Module> with
